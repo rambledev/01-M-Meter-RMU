@@ -52,14 +52,15 @@
 | Field | ที่มา |
 |---|---|
 | Meter ID / Room / Zone | ได้จาก QR (ระบบรู้เอง ไม่ต้องกรอก) |
-| Month | เลือกเดือน (auto-select ปัจจุบัน, ย้อนหลังได้, ห้ามอนาคต) |
-| Previous Reading | Query จาก reading ของเดือนก่อนหน้าเดือนที่เลือก |
+| Month (`readingMonth`) | เลือกเดือน (auto-select ปัจจุบัน, ย้อนหลังได้, ห้ามอนาคต) |
+| Previous Reading (`previousReading`) | Query จาก reading ของเดือนก่อนหน้าเดือนที่เลือก แล้ว **persist เป็น snapshot** ลง field นี้ตอน confirm (Phase 1 decision — ดู decision-log.md) |
 | Original Image | ภาพเต็มจากกล้อง — **ค่าเดียวที่ persist เป็นไฟล์** เก็บที่ `public/upload/meter/{MeterID}m{MM}_{YYYY}.{ext}` (ดู data-model.md §3.2) |
-| OCR Value | ผลลัพธ์ดิบจาก OCR (ได้จาก crop ชั่วคราวใน memory — **ไม่ persist ตัวภาพ crop**, persist แค่ค่าตัวเลขนี้) |
-| Confirmed Value | ค่าที่ผู้จดตรวจ/แก้ไขแล้ว (ค่าที่ใช้จริงในการคำนวณ/รายงาน) |
-| Sync Status | DRAFT / PENDING_SYNC / SYNCING / SYNCED / SYNC_ERROR |
-| Reader (Role/User ที่จด) | จาก role ที่เลือกใน MVP |
-| Timestamp | เวลาที่บันทึก |
+| OCR Value (`ocrValue`) | ผลลัพธ์ดิบจาก OCR (ได้จาก crop ชั่วคราวใน memory — **ไม่ persist ตัวภาพ crop**, persist แค่ค่าตัวเลขนี้) |
+| Confirmed Value (`confirmedValue`) | ค่าที่ผู้จดตรวจ/แก้ไขแล้ว (ค่าที่ใช้จริงในการคำนวณ/รายงาน) |
+| Usage (`usage`) | `confirmedValue - previousReading` — persist ตอน confirm (ไม่ต้องคำนวณซ้ำตอน export) |
+| Sync Status (`status`) | DRAFT / PENDING_SYNC / SYNCING / SYNCED / SYNC_ERROR |
+| Recorder (`recordedBy`) | ผู้ใช้ที่จด (จาก role ที่เลือกใน MVP) |
+| Recorded At (`recordedAt`) | เวลาที่ผู้จดกด confirm — ต่างจากเวลาที่ record เขียนลง DB จริง (`createdAt`) ถ้า sync จาก offline queue ช้ากว่า |
 
 ---
 

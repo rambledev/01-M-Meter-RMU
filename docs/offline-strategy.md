@@ -35,11 +35,14 @@ interface LocalReading {
   serverId?: string;          // เติมทีหลังเมื่อ sync สำเร็จ
   meterId: string;
   readingMonth: string;       // ISO date string ของวันที่ 1 ของเดือน
+  previousReading?: number;   // snapshot ณ เวลา confirm (mirror ของ Reading.previousReading, data-model.md §3.1)
   originalImageBlob: Blob;    // ภาพต้นฉบับเต็มภาพเท่านั้น — เก็บรูปจริงไว้ในเครื่องจนกว่าจะ SYNCED (mirror ของ ReadingImage ใน data-model.md §3.2)
   ocrValue?: string;
   confirmedValue: number;
+  usage?: number;             // confirmedValue - previousReading ณ เวลา confirm (mirror ของ Reading.usage)
   status: "DRAFT" | "PENDING_SYNC" | "SYNCING" | "SYNCED" | "SYNC_ERROR";
-  readerId: string;
+  recordedBy: string;
+  recordedAt: string;         // business timestamp ตอน confirm — แยกจาก createdAt (เวลาที่ record เขียนลง DB จริง)
   createdAt: string;
   lastSyncError?: string;
 }

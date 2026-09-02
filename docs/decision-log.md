@@ -94,6 +94,42 @@
 
 ---
 
+## ✅ Decision — Persist `previousReading` และ `usage` บน Reading (Phase 1, 2026-09-02)
+
+**บริบท**: ตอนเริ่ม Phase 1 (Core Data Model) พบว่า field list ที่ผู้ใช้กำหนดให้ Reading ต้องมี (`previousReading`, `usage`, `recordedBy`, `recordedAt`) **ขัดแย้งกับเอกสารที่ล็อกไว้ก่อนหน้า**:
+- `data-model.md` §6 (ฉบับก่อน Phase 1) ระบุว่า `usage` "ไม่ persist ซ้ำใน DB" คำนวณตอน export เท่านั้น
+- `workflow.md`/`requirement.md` ไม่เคยมี field `previousReading` — ออกแบบให้ query สดจาก Reading เดือนก่อนหน้าเสมอ เพื่อให้ได้ค่าล่าสุดถ้า reading เดือนก่อนถูกแก้ไขภายหลัง
+
+ผู้ใช้ยืนยันชัดเจน (ผ่านคำถามที่ถามก่อนเขียน schema) ว่าให้ **persist ทั้งสอง field** บน `Reading` เป็น snapshot ณ เวลา confirm
+
+**Decision**:
+- `Reading.previousReading` (`Decimal?`) — snapshot ของ `Reading.confirmedValue` เดือนก่อนหน้า ณ เวลา confirm
+- `Reading.usage` (`Decimal?`) — `confirmedValue - previousReading` ณ เวลา confirm
+- ทั้งสอง nullable เพราะ reading แรกของมิเตอร์ไม่มีเดือนก่อนหน้าให้ snapshot
+
+**Trade-off ที่รับทราบแล้ว**: ถ้า reading เดือนก่อนหน้าถูกแก้ไขภายหลัง `previousReading`/`usage` ที่ persist ไว้ในเดือนถัดไป **จะไม่ auto-update ตาม** (เป็น snapshot ณ เวลา confirm ไม่ใช่ live query) — เป็นความเสี่ยงด้าน data staleness ที่ผู้ใช้ยอมรับแลกกับความเรียบง่ายและ audit trail ที่ตรงกับค่าที่ผู้ใช้เห็นจริง ณ ตอน confirm
+
+**Field naming เพิ่มเติม**: rename `readerId`/`reader` → `recordedBy`/`recorder`, เพิ่ม `recordedAt` (business timestamp เวลาที่ผู้ใช้บันทึก/ยืนยัน — แยกจาก `createdAt` ซึ่งเป็นเวลาที่ record เขียนลง DB จริง อาจต่างกันถ้า sync จาก offline queue ช้ากว่า) — ไม่ใช่ความขัดแย้งเชิงสถาปัตยกรรม เป็นแค่ rename
+
+**ผลกระทบต่อเอกสาร**: `data-model.md` (§1, §3.1, §5, §6), `export-format.md` (§2, §3) อัปเดตให้ตรงกับ schema จริงแล้ว
+
+**สถานะ**: ✅ Locked — ยืนยันจากผู้ใช้โดยตรงก่อนเขียน `prisma/schema.prisma`
+
+---
+
+## ✅ Decision — Schema Review Fixes: `confirmedValue` nullable, `readingMonth @db.Date` (Phase 1, 2026-09-02)
+
+หลังตรวจ Phase 1 schema รอบแรก ผู้ใช้สั่งแก้ 2 จุดก่อน commit:
+
+1. **`Reading.confirmedValue`**: `Decimal` (required) → **`Decimal?`** (nullable) — เหตุผล: Reading อยู่ในสถานะ `DRAFT` ได้ก่อนที่ผู้ใช้จะ confirm ดังนั้น `confirmedValue` ยังไม่ต้องมีค่าตั้งแต่สร้าง record กติกา "ต้องมีค่าเมื่อ confirm แล้ว" จะบังคับที่ **application/service layer ใน Phase 3** ไม่ใช่ DB CHECK constraint (หลีกเลี่ยงความซับซ้อนเกินจำเป็นใน Phase 1) — `usage` ยังคง `Decimal?` เดิม (NULL ได้ทั้งตอนยังไม่ confirm และตอนไม่มี `previousReading`)
+2. **`Reading.readingMonth`**: `DateTime` → **`DateTime @db.Date`** — เหตุผล: `readingMonth` คือ "เดือนที่ reading อ้างอิง" ไม่ใช่ timestamp การใช้ PostgreSQL `DATE` (แทน `timestamp(3)`) ตัดปัญหา time-of-day/timezone ทิ้งไปเลย เหมาะกับ `@@unique([meterId, readingMonth])` มากกว่า — ชื่อ field และ unique constraint ไม่เปลี่ยน, application/service layer ยังต้อง normalize เป็นวันที่ 1 ของเดือนเสมอ
+
+**ผลกระทบต่อเอกสาร**: `data-model.md` §3.1 (code block) และ §5 (rationale table) sync ให้ตรงกับ `prisma/schema.prisma` แล้ว
+
+**สถานะ**: ✅ Locked — `npx prisma validate`/`generate` ผ่านทั้งคู่หลังแก้
+
+---
+
 ## บริบทการตัดสินใจ (เพื่ออ้างอิง — ไม่ใช่ประเด็นที่ต้องตัดสินใจอีกแล้ว)
 
 ส่วนนี้เก็บผลการตรวจสอบเดิม (2026-09-01) ไว้เพื่อเป็นบริบทว่าทำไมแต่ละรายการถึงมีทางเลือกอื่น แต่ **สถานะทั้งหมดคือ resolved/approved แล้ว** ตามหัวข้อ Locked Decisions ด้านบน
@@ -161,6 +197,6 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 
 **Git/GitHub ตั้งค่าแล้ว** — repo เชื่อมกับ `origin` ที่ https://github.com/rambledev/01-M-Meter-RMU.git และ push commit แรก (`chore: initialize project foundation`) ขึ้น `main` แล้ว (ดูรายละเอียดในรายงาน Phase 0)
 
-**ยังไม่มีการสร้าง Prisma Data Model จริง, ยังไม่มี migration, ยังไม่มี application/business logic ใดๆ** — สิ่งเหล่านี้อยู่ใน scope ของ Phase 1 เป็นต้นไป ตามคำสั่งของผู้ใช้ ห้ามเริ่มจนกว่าจะได้รับคำสั่ง "เริ่ม Phase 1"
-
 **อัปเดต 2026-09-02 (เพิ่มเติมหลัง Phase 0)**: ปรับ requirement เรื่อง OCR Image Storage — ดูหัวข้อ "ไม่จัดเก็บ OCR Crop Image แบบถาวร" ด้านบน เป็นการปรับ documentation/architecture เท่านั้น **ยังไม่ได้แก้ schema จริง ไม่มี migration** (ตรงตามที่ระบุ)
+
+**Phase 1 (Core Data Model) — schema สร้างแล้ว, ยังไม่ migrate**: `prisma/schema.prisma` มี model ครบ (Zone/Room/Meter/Reading/ReadingImage/User/SyncLog) ตรงกับ data-model.md แล้ว, `npx prisma validate` และ `npx prisma generate` ผ่านทั้งคู่ (ไม่แตะ database จริง) — **ยังไม่รัน `prisma migrate`/`db push`/`db pull` ใดๆ ทั้งสิ้น** และ**ยังไม่ seed ข้อมูลลง PostgreSQL จริง** ตามคำสั่งของผู้ใช้ รอการตรวจสอบ schema จากผู้ใช้ก่อนทำ migration หรือเริ่ม Phase 2

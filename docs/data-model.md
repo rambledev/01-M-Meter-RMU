@@ -1,10 +1,11 @@
 # Data Model — RMU Meter Collection
 
-> สถานะ: **Architecture Specification เท่านั้น — ยังไม่มีการสร้างไฟล์ `prisma/schema.prisma` จริง ยังไม่ install Prisma ยังไม่สร้าง database หรือ migration ใดๆ**
+> สถานะ: **Phase 1 — `prisma/schema.prisma` สร้างจริงแล้ว (validate ผ่าน, generate ผ่าน) แต่ยังไม่ migrate/push ขึ้น database จริง**
 > ORM: Prisma **5.22.0** (locked — ดู [decision-log.md](decision-log.md)) บน PostgreSQL **17**
 > อ้างอิง business rules จาก [requirement.md](requirement.md) และ [workflow.md](workflow.md)
 > **ปรับปรุง 2026-09-02**: `ReadingImage` เก็บเฉพาะรูป **ORIGINAL** เท่านั้น — ไม่มี `OCR_REGION` อีกต่อไป (ดู [decision-log.md](decision-log.md) หัวข้อ "ไม่จัดเก็บ OCR Crop Image แบบถาวร")
 > **ปรับปรุงเพิ่มเติม 2026-09-02**: ชื่อไฟล์ Original Image เปลี่ยนเป็น `{MeterID}m{MM}_{YYYY}.{ext}` (เพิ่มปี ค.ศ.) เพื่อแก้ปัญหา overwrite ข้ามปี — ดู §3.2
+> **ปรับปรุง Phase 1 (2026-09-02)**: เพิ่ม `previousReading` และ `usage` เป็น field ที่ persist บน `Reading` (snapshot ตอน confirm) — **กลับคำตัดสินใจเดิม** ที่เคยระบุว่า "ไม่ persist ซ้ำใน DB" ตามที่ผู้ใช้ยืนยันชัดเจนใน Phase 1 kickoff (ดู decision-log.md) และ rename `readerId`/`reader` → `recordedBy`/`recorder` พร้อมเพิ่ม `recordedAt` (business timestamp แยกจาก `createdAt`)
 
 ---
 
@@ -13,7 +14,7 @@
 ```
 Zone 1───* Room 1───* Meter 1───* Reading 1───* ReadingImage
                                      │
-                                     ├── *───1 User (reader)
+                                     ├── *───1 User (recorder)
                                      │
                                      └── 1───* SyncLog (ประวัติการ sync ต่อ reading)
 ```
@@ -85,19 +86,22 @@ model Meter {
 }
 
 model Reading {
-  id               String        @id @default(cuid())
-  meterId          String
-  meter            Meter         @relation(fields: [meterId], references: [id])
-  readingMonth     DateTime      // เก็บเป็นวันที่ 1 ของเดือน เพื่อใช้ unique + query ง่าย เช่น 2026-03-01
-  ocrValue         String?                      // OCR Value ดิบ (nullable กรณี manual entry ล้วน)
-  confirmedValue   Decimal                      // Confirmed Value — ค่าที่ใช้จริงในการคำนวณ/รายงาน
-  status           ReadingStatus @default(DRAFT)
-  readerId         String
-  reader           User          @relation(fields: [readerId], references: [id])
-  images           ReadingImage[]
-  syncLogs         SyncLog[]
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id              String         @id @default(cuid())
+  meterId         String
+  meter           Meter          @relation(fields: [meterId], references: [id])
+  readingMonth    DateTime       @db.Date // เดือนที่ reading อ้างอิง (ไม่ใช่ timestamp) — เก็บเป็นวันที่ 1 ของเดือนเสมอ เช่น 2026-09-01 (normalize ที่ application/service layer, ไม่เก็บเวลา/timezone)
+  previousReading Decimal?       // snapshot ของ Reading.confirmedValue เดือนก่อนหน้า ณ เวลา confirm (nullable: ไม่มีค่าถ้าเป็น reading แรกของมิเตอร์นี้)
+  ocrValue        String?        // OCR Value ดิบ (nullable กรณี manual entry ล้วน)
+  confirmedValue  Decimal?       // Confirmed Value — NULL ได้ตอน DRAFT/ก่อน confirm, ต้องมีค่าเมื่อ confirm แล้ว (บังคับที่ application/service layer ใน Phase 3 ไม่ใช่ DB CHECK constraint)
+  usage           Decimal?       // confirmedValue - previousReading ณ เวลา confirm — NULL ได้ทั้งตอนยังไม่ confirm และตอนไม่มี previousReading
+  status          ReadingStatus  @default(DRAFT)
+  recordedBy      String
+  recorder        User           @relation(fields: [recordedBy], references: [id])
+  recordedAt      DateTime       // เวลาที่ผู้ใช้บันทึก/ยืนยันรายการ (business timestamp) — ต่างจาก createdAt ซึ่งเป็นเวลาที่ record เขียนลง DB จริง (อาจต่างกันถ้า sync จาก offline queue ช้ากว่า) ห้ามใช้แทน readingMonth
+  images          ReadingImage[]
+  syncLogs        SyncLog[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@unique([meterId, readingMonth])   // Duplicate Prevention ตาม requirement.md §3.2 — ดูรายละเอียดเต็มใน §4
 }
@@ -165,11 +169,14 @@ model ReadingImage {
 
 | การตัดสินใจ | เหตุผล |
 |---|---|
-| `Reading.readingMonth` เป็น `DateTime` (วันที่ 1 ของเดือน) แทน string/enum | ทำให้ query "เดือนก่อนหน้า" (Previous Reading) ง่ายด้วย date arithmetic ตรงตาม requirement.md §3.1 |
+| `Reading.readingMonth` เป็น `DateTime @db.Date` (วันที่ 1 ของเดือน) แทน string/enum | ทำให้ query "เดือนก่อนหน้า" (Previous Reading) ง่ายด้วย date arithmetic ตรงตาม requirement.md §3.1 — `@db.Date` (แทน timestamp เต็ม) เพราะ `readingMonth` คือ "เดือนที่อ้างอิง" ไม่ใช่ event ที่มีเวลา ตัด time-of-day/timezone ทิ้งไปเลยตัดปัญหาความไม่ตรงกันเวลาเปรียบเทียบ (Phase 1 review, 2026-09-02) — application/service layer ต้อง normalize เป็นวันที่ 1 ของเดือนเสมอ |
+| `Reading.confirmedValue` เป็น `Decimal?` (nullable) แทน required | Reading อยู่ในสถานะ DRAFT ได้ก่อน confirm — `confirmedValue` จึงยังไม่ต้องมีตั้งแต่สร้าง record (Phase 1 review, 2026-09-02) validation ว่า "ต้องมีค่าเมื่อ confirm แล้ว" อยู่ที่ application/service layer ใน Phase 3 ไม่ใช่ DB CHECK constraint (หลีกเลี่ยงความซับซ้อนเกินจำเป็นใน Phase 1) |
 | `@@unique([meterId, readingMonth])` ที่ระดับ database | บังคับ Duplicate Prevention (requirement.md §3.2) ที่ชั้น DB ไม่ใช่แค่ตรวจใน application logic — รายละเอียดเต็มอยู่ใน §4 |
 | แยก `ReadingImage` เป็น entity ต่างหาก (1:N กับ Reading) แทนการฝัง field ใน Reading | ตรงตาม requirement.md §3.3 ที่ต้องเก็บ Original Image เป็นหลักฐานอ้างอิง — การเป็น entity แยกทำให้ schema สื่อความหมายตรงและขยายได้ง่ายกว่า field เดี่ยว |
 | `ReadingImage` **ไม่มี** `type`/`cropRegion` (ตัดออกจากฉบับก่อนหน้า) | เก็บเฉพาะ ORIGINAL เท่านั้น — OCR Region เป็นข้อมูลชั่วคราวใน memory/client ไม่ persist ลง DB/server อีกต่อไป (decision-log.md: "ไม่จัดเก็บ OCR Crop Image แบบถาวร") |
 | `ocrValue` และ `confirmedValue` ยังอยู่บน `Reading` โดยตรง (ไม่ย้ายไป ReadingImage) | เพราะเป็นค่าตัวเลขที่ผูกกับ "การอ่านมิเตอร์ครั้งนี้" ไม่ใช่ attribute ของรูปภาพ — ค่า OCR ได้มาจากการประมวลผล crop ชั่วคราว แต่ผลลัพธ์ (`ocrValue`)/`confirmedValue` ยังต้อง persist เสมอตาม requirement.md §3.3 |
+| `previousReading` และ `usage` เป็น field ที่ persist บน `Reading` (nullable, snapshot ณ เวลา confirm) | **Phase 1 decision (2026-09-02)**: ผู้ใช้ยืนยันชัดเจนให้ persist ทั้งสอง field แทนการ derive สดทุกครั้ง — trade-off ที่รับทราบแล้ว: เป็น snapshot ณ เวลา confirm ถ้า reading เดือนก่อนหน้าถูกแก้ไขภายหลัง ค่า `previousReading`/`usage` ที่ persist ไว้จะไม่ auto-update ตาม (ต่างจากการ query สดที่เคยออกแบบไว้ในเอกสารรุ่นก่อน) — ถือเป็น audit snapshot ของค่าที่ผู้ใช้เห็น ณ ตอน confirm จริง |
+| `readerId`/`reader` เปลี่ยนชื่อเป็น `recordedBy`/`recorder`, เพิ่ม `recordedAt` แยกจาก `createdAt` | **Phase 1 decision (2026-09-02)**: ตามชื่อ field ที่ผู้ใช้กำหนดใน Phase 1 kickoff — `recordedAt` คือ business timestamp (เวลาที่ผู้ใช้ confirm) ส่วน `createdAt` คือเวลาที่ record ถูกเขียนลง DB จริง (ต่างกันได้ถ้า sync จาก offline queue ช้ากว่า) |
 | `SyncLog` แยกออกจาก `Reading` แทนการเก็บ error ไว้ใน Reading ตรงๆ | รองรับหลาย attempt ต่อ 1 reading (retry) และเก็บ history การ sync ไว้ตรวจสอบย้อนหลังได้ (workflow.md §3) |
 | `residentName` เป็น field บน `Room` ไม่ใช่ผูกกับ `User` | เพราะ RESIDENT ใน MVP ยังไม่มี login จริง (requirement.md §2) และ export ต้องการ "ชื่อ-สกุล" ผูกกับห้อง ไม่ใช่ผูกกับ account |
 | `Meter.code` มี `@unique` | เป็น key ที่ QR code อ้างอิงถึง (workflow.md ขั้นตอน 1 Scan QR → resolve เป็น Meter) |
@@ -179,5 +186,5 @@ model ReadingImage {
 ## 6. จุดที่ยังรอ requirement เพิ่มเติม (ไม่ block การออกแบบ schema นี้ แต่จะกระทบตอน implement)
 
 - ขอบเขตสิทธิ์ RESIDENT ที่ชัดเจนอาจต้องเพิ่ม relation `User` ↔ `Room` ถ้า RESIDENT ต้อง login จริงในอนาคต (ปัจจุบัน MVP ไม่มี login — ดู requirement.md §5 ข้อ 3)
-- ฟิลด์สำหรับสูตรคำนวณค่าไฟ (ค่าไฟพื้นฐาน/FT/ภาษี) **ยังไม่เพิ่มใน schema นี้โดยตั้งใจ** เพราะสูตรยังไม่ final (requirement.md §5 ข้อ 1) — ค่าที่คำนวณได้แน่นอนอยู่แล้ว (`usage = confirmedValue - previousReading`) จะคำนวณตอน export ผ่าน Calculation Service (export-format.md §3) ไม่ persist ซ้ำใน DB
+- ฟิลด์สำหรับสูตรคำนวณค่าไฟ (ค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้น) **ยังไม่เพิ่มใน schema นี้โดยตั้งใจ** เพราะสูตรยังไม่ final (requirement.md §5 ข้อ 1) — ต่างจาก `usage` ซึ่งคำนวณได้แน่นอนแล้ว (`confirmedValue - previousReading`) และตอนนี้ persist เป็น field บน `Reading` โดยตรงแล้ว (ดู §3.1, §5) ส่วนค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นยังคงคำนวณผ่าน Calculation Service ตอน export เท่านั้น (export-format.md §3) เพราะยังไม่มีสูตรจริง
 - **Persistent storage สำหรับ `public/upload/meter/` บน production (deploy ด้วย Coolify)** ยังเป็นแค่ requirement ระดับ infra ไม่ใช่ schema — ไม่กระทบ `ReadingImage.path` ซึ่งเก็บแค่ path แบบ relative เสมอ ไม่ผูกกับ storage backend ใดโดยเฉพาะ (ดู offline-strategy.md §7 และ tech-stack.md)

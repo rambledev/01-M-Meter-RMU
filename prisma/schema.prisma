@@ -1,6 +1,6 @@
-// Prisma configuration only — Phase 0 scope.
-// Data model (Zone/Room/Meter/Reading/ReadingImage/User/SyncLog) is defined in Phase 1.
-// See docs/data-model.md for the approved schema design.
+// Phase 1 — Core Data Model.
+// See docs/data-model.md for the approved schema design and rationale.
+// See docs/decision-log.md for the Phase 1 clarification on previousReading/usage.
 
 generator client {
   provider = "prisma-client-js"
@@ -9,4 +9,93 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  METER_READER
+  RESIDENT
+}
+
+enum ReadingStatus {
+  DRAFT
+  PENDING_SYNC
+  SYNCING
+  SYNCED
+  SYNC_ERROR
+}
+
+model Zone {
+  id        String   @id @default(cuid())
+  name      String
+  rooms     Room[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Room {
+  id           String   @id @default(cuid())
+  name         String // เลขที่บ้านพัก/ห้อง
+  residentName String? // ชื่อ-สกุลผู้พักอาศัย (ใช้ตอน export คอลัมน์ "ชื่อ-สกุล")
+  zoneId       String
+  zone         Zone     @relation(fields: [zoneId], references: [id])
+  meters       Meter[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Meter {
+  id        String    @id @default(cuid())
+  code      String    @unique // รหัส/หมายเลขมิเตอร์ ที่ QR อ้างอิงถึง (QR ไม่เก็บ Room ID — lookup room/zone ผ่าน Meter)
+  roomId    String
+  room      Room      @relation(fields: [roomId], references: [id])
+  readings  Reading[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Reading {
+  id              String         @id @default(cuid())
+  meterId         String
+  meter           Meter          @relation(fields: [meterId], references: [id])
+  readingMonth    DateTime       @db.Date // เดือนที่ reading อ้างอิง (ไม่ใช่ timestamp) — เก็บเป็นวันที่ 1 ของเดือนเสมอ เช่น 2026-09-01 (normalize ที่ application/service layer, ไม่เก็บเวลา/timezone)
+  previousReading Decimal? // snapshot ของ Reading.confirmedValue เดือนก่อนหน้า ณ เวลา confirm (nullable: ไม่มีค่าถ้าเป็น reading แรกของมิเตอร์นี้)
+  ocrValue        String? // OCR Value ดิบ (nullable กรณี manual entry ล้วน)
+  confirmedValue  Decimal? // Confirmed Value — NULL ได้ตอน DRAFT/ก่อน confirm, ต้องมีค่าเมื่อ confirm แล้ว (บังคับที่ application/service layer ใน Phase 3 ไม่ใช่ DB CHECK constraint)
+  usage           Decimal? // confirmedValue - previousReading ณ เวลา confirm — NULL ได้ทั้งตอนยังไม่ confirm และตอนไม่มี previousReading
+  status          ReadingStatus  @default(DRAFT)
+  recordedBy      String
+  recorder        User           @relation(fields: [recordedBy], references: [id])
+  recordedAt      DateTime // เวลาที่ผู้ใช้บันทึก/ยืนยันรายการ (business timestamp — ต่างจาก createdAt ซึ่งเป็นเวลาที่ record ถูกเขียนลง DB จริง อาจต่างกันถ้า sync จาก offline queue ช้ากว่า)
+  images          ReadingImage[]
+  syncLogs        SyncLog[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([meterId, readingMonth]) // Duplicate Prevention (requirement.md §3.2) — database เป็น source of truth, UI check เป็นแค่ best-effort
+}
+
+model ReadingImage {
+  id        String   @id @default(cuid())
+  readingId String
+  reading   Reading  @relation(fields: [readingId], references: [id])
+  path      String // path ของรูปต้นฉบับ (ORIGINAL เท่านั้น) เช่น /upload/meter/ME-001m09_2026.jpg — server สร้างชื่อไฟล์นี้ใน Phase 4 (ไม่ใช่ Phase 1)
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  role      Role
+  readings  Reading[]
+  createdAt DateTime  @default(now())
+}
+
+model SyncLog {
+  id          String        @id @default(cuid())
+  readingId   String
+  reading     Reading       @relation(fields: [readingId], references: [id])
+  attemptedAt DateTime      @default(now())
+  status      ReadingStatus // สถานะ ณ ตอนพยายาม sync ครั้งนี้
+  errorReason String? // เก็บ error message เมื่อ status = SYNC_ERROR (workflow.md §3: ห้าม fail เงียบๆ)
 }

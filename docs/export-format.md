@@ -3,6 +3,7 @@
 > สถานะ: **⏸️ ยังไม่ final — รอสูตรคำนวณค่าไฟและไฟล์ตัวอย่างรายงานจริงจากผู้ใช้** (ดู [requirement.md](requirement.md) §5 ข้อ 1–2)
 > เอกสารนี้ระบุเฉพาะส่วนที่คำนวณได้แน่นอนแล้ว — **ห้ามเดาสูตรค่าไฟ** ตามคำสั่งเดิมของผู้ใช้
 > อ้างอิง [workflow.md](workflow.md) §4 และ [data-model.md](data-model.md)
+> **ปรับปรุง Phase 1 (2026-09-02)**: `usage` เปลี่ยนจาก "คำนวณตอน export เท่านั้น" เป็น **persist เป็น field บน `Reading` แล้ว** (snapshot ณ เวลา confirm) — ดู §2
 
 ---
 
@@ -19,7 +20,7 @@
 | — | เลขที่บ้านพัก | ✅ มาจาก `Room.name` (data-model.md) |
 | — | ชื่อ-สกุล | ✅ มาจาก `Room.residentName` (data-model.md) |
 | อ่านมิเตอร์ | ครั้งหลัง | ✅ มาจาก `Reading.confirmedValue` ของเดือนที่ export |
-| อ่านมิเตอร์ | ครั้งก่อน | ✅ มาจาก `Reading.confirmedValue` ของเดือนก่อนหน้า (ใช้ logic เดียวกับ Previous Reading ใน requirement.md §3.1) |
+| อ่านมิเตอร์ | ครั้งก่อน | ✅ มาจาก `Reading.previousReading` ที่ persist ไว้แล้ว (snapshot ณ เวลา confirm — ดู data-model.md §3.1) |
 | ค่าไฟ | ค่าไฟพื้นฐาน | 🔴 รอสูตร |
 | ค่าไฟ | ค่า FT | 🔴 รอสูตร |
 | ค่าไฟ | ภาษี | 🔴 รอสูตร |
@@ -34,7 +35,7 @@ usage = confirmedValue - previousReading
 (หน่วยที่ใช้ = ครั้งหลัง − ครั้งก่อน)
 ```
 
-ค่านี้ไม่ persist ซ้ำใน database (ดู data-model.md §6) — คำนวณตอน generate export เท่านั้น จาก `Reading.confirmedValue` ของเดือนปัจจุบัน และ `previousReading` ที่ query จาก `Reading.confirmedValue` ของเดือนก่อนหน้า (logic เดียวกับ Previous Reading ใน requirement.md §3.1)
+**อัปเดต Phase 1**: `Reading.usage` และ `Reading.previousReading` **persist เป็น field บน `Reading` โดยตรงแล้ว** (snapshot ที่คำนวณ ณ เวลา confirm — ดู data-model.md §3.1, §5) — Export **อ่านค่าจาก `Reading.usage` ตรงๆ ไม่ต้องคำนวณซ้ำ** ต่างจากที่เคยออกแบบไว้ในเอกสารรุ่นก่อนที่ให้คำนวณตอน export เท่านั้น
 
 ---
 
@@ -44,12 +45,12 @@ usage = confirmedValue - previousReading
 
 ```
 src/lib/export/
-├── calculation.ts   # Calculation Service — usage, และ (ในอนาคต) ค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้น
+├── calculation.ts   # Calculation Service — (ในอนาคต) ค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้น
 └── excel.ts         # Excel generation — layout, merge cell, formatting เท่านั้น ไม่มี business logic คำนวณ
 ```
 
 - **เหตุผลที่ต้องแยก**: สูตรค่าไฟ (§4 ด้านล่าง) ยังไม่ final และมีแนวโน้มเปลี่ยนแปลง/ปรับ config ได้ในอนาคต (เช่น อัตรา FT เปลี่ยนรายเดือน) — ถ้าฝัง logic ไว้ใน excel generation จะทำให้แก้สูตรกระทบ layout code โดยไม่จำเป็น
-- **Calculation Service วันนี้** ทำได้แค่ `usage` (สูตรด้านบน) เท่านั้น — ฟังก์ชันคำนวณค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นจะเป็น stub ที่รอสูตรจริงก่อนเขียนจริง (ไม่ implement แบบเดาไปก่อน)
+- **`usage` ไม่ต้องผ่าน Calculation Service อีกต่อไป** (อัปเดต Phase 1) — เพราะ persist เป็น field บน `Reading` แล้ว อ่านตรงจาก DB ได้เลย (§2) — Calculation Service เหลือหน้าที่แค่สูตรค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นที่ยังไม่ final เท่านั้น (จะเป็น stub ที่รอสูตรจริงก่อนเขียนจริง ไม่ implement แบบเดาไปก่อน)
 - Calculation Service ควร unit-test ได้อิสระจาก Excel generation เพื่อให้ตรวจสอบสูตรถูกต้องได้โดยไม่ต้อง generate ไฟล์จริงทุกครั้ง
 
 ---
