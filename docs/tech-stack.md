@@ -22,6 +22,7 @@
 | Offline Storage | Dexie.js (IndexedDB wrapper) | latest stable ที่เข้ากับ React 19 |
 | Package Manager | npm | — |
 | Containerization | Docker + Docker Compose | — |
+| Production Deployment | Coolify | ใช้ **Persistent Storage ของ Coolify** สำหรับ `public/upload/meter/` (ภาพต้นฉบับ) — ยังไม่ใช้ S3/MinIO ใน MVP นี้ (เพิ่ม 2026-09-02, ดู decision-log.md) |
 
 **ห้ามเปลี่ยนแปลงรายการนี้โดยไม่ได้รับคำสั่งจากผู้ใช้โดยตรง** (ดูเงื่อนไขใน decision-log.md)
 
@@ -83,6 +84,7 @@ rmu-01-meter/
 │   ├── hooks/                     # useOnlineStatus, useSyncQueue, ...
 │   └── types/                     # Role, ReadingStatus ฯลฯ
 ├── public/
+│   └── upload/meter/              # Original Image ต้นฉบับ ({MeterID}m{MM}_{YYYY}.{ext}) — ต้อง persistent storage บน production (Coolify)
 ├── docker-compose.yml             # PostgreSQL 17 + app service
 ├── Dockerfile
 ├── .env.example
@@ -116,3 +118,6 @@ rmu-01-meter/
 2. **OCR offline capability** — ถ้าเลือก OCR provider แบบ API-based จะ OCR ไม่ได้ตอน offline ซึ่งขัดกับ core requirement "Offline First" — ต้องตัดสินใจร่วมกับ requirement.md §5 ข้อ 4 ก่อนเริ่ม Phase 4 (Camera + OCR)
 3. **สูตรคำนวณค่าไฟยังไม่ final** — ห้ามเดา ต้อง block เฉพาะ Phase 6 (Excel Export) ส่วนคำนวณ ไม่ block phase อื่น
 4. **Tailwind 4.x CSS-first config** — ทีมต้องคุ้นเคยกับ `@theme` แทน `tailwind.config.js` แบบเดิม
+5. **ไม่จัดเก็บ OCR Crop Image แบบถาวร (2026-09-02)** — เก็บเฉพาะ Original Image เป็นหลักฐาน + ค่าตัวเลข OCR/Confirmed Value เท่านั้น เพื่อลดพื้นที่จัดเก็บและความซับซ้อน (เหตุผลเต็มดู decision-log.md, data model ดู data-model.md §3.2)
+6. **ชื่อไฟล์ Original Image `{MeterID}m{MM}_{YYYY}.{ext}`** — เพิ่มปี ค.ศ. เข้าไปในชื่อไฟล์แล้ว (2026-09-02) แก้ปัญหา overwrite ข้ามปีที่เคยเป็นความเสี่ยงที่ยังไม่ resolve (ดู decision-log.md หัวข้อ "เพิ่มปี ค.ศ. ในชื่อไฟล์รูปภาพมิเตอร์" และ data-model.md §3.2) — resolved แล้ว ไม่ใช่ risk อีกต่อไป
+7. **Persistent Storage บน Coolify สำหรับ `public/upload/meter/`** — เป็น requirement ที่ยืนยันแล้วสำหรับ MVP (ไม่ใช้ S3/MinIO) แต่การ config volume จริงยังไม่ implement ในเอกสารรอบนี้ ต้องทำก่อน deploy จริงเพื่อไม่ให้รูปหายเมื่อ container redeploy

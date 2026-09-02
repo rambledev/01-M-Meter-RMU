@@ -3,6 +3,8 @@
 > สถานะ: **Architecture Specification เท่านั้น — ยังไม่ install Dexie.js หรือเขียนโค้ดใดๆ**
 > อ้างอิง business rules จาก [requirement.md](requirement.md) §3.4 และ [workflow.md](workflow.md) §3
 > เชื่อมโยงกับ [data-model.md](data-model.md) — schema ฝั่ง client (IndexedDB) mirror บางส่วนของ Prisma schema ฝั่ง server
+> **ปรับปรุง 2026-09-02**: เก็บเฉพาะ Original Image ใน IndexedDB — ไม่มี OCR Crop Blob อีกต่อไป (crop เป็นข้อมูลชั่วคราวใน memory เท่านั้น ดู [decision-log.md](decision-log.md))
+> **ปรับปรุงเพิ่มเติม 2026-09-02**: ชื่อไฟล์ที่ server ตั้งตอน sync สำเร็จเปลี่ยนเป็น `{MeterID}m{MM}_{YYYY}.{ext}` (เพิ่มปี ค.ศ. กันชื่อซ้ำข้ามปี)
 
 ---
 
@@ -33,19 +35,13 @@ interface LocalReading {
   serverId?: string;          // เติมทีหลังเมื่อ sync สำเร็จ
   meterId: string;
   readingMonth: string;       // ISO date string ของวันที่ 1 ของเดือน
-  images: LocalReadingImage[];  // mirror ของ ReadingImage (data-model.md §3.2) — เก็บทั้ง ORIGINAL และ OCR_REGION
+  originalImageBlob: Blob;    // ภาพต้นฉบับเต็มภาพเท่านั้น — เก็บรูปจริงไว้ในเครื่องจนกว่าจะ SYNCED (mirror ของ ReadingImage ใน data-model.md §3.2)
   ocrValue?: string;
   confirmedValue: number;
   status: "DRAFT" | "PENDING_SYNC" | "SYNCING" | "SYNCED" | "SYNC_ERROR";
   readerId: string;
   createdAt: string;
   lastSyncError?: string;
-}
-
-interface LocalReadingImage {
-  type: "ORIGINAL" | "OCR_REGION";
-  blob: Blob;                 // เก็บรูปจริงไว้ในเครื่องจนกว่าจะ SYNCED
-  cropRegion?: { x: number; y: number; width: number; height: number }; // เฉพาะ type = OCR_REGION
 }
 
 interface SyncQueueItem {
@@ -56,7 +52,9 @@ interface SyncQueueItem {
 }
 ```
 
-> field ตรงกับ `Reading` + `ReadingImage` ใน data-model.md (§3.1–3.2) เพื่อให้ map ไป-กลับระหว่าง client/server ตรงกันโดยไม่ต้อง transform ซับซ้อน — ตอน sync สำเร็จ แต่ละ `LocalReadingImage` จะถูก upload แล้วสร้างเป็น `ReadingImage` record แยกต่อรูปที่ server (relation 1:N ตาม data-model.md §3.2)
+> **ไม่มี OCR crop blob เก็บใน IndexedDB** — OCR Region ถูก crop จาก `originalImageBlob` แบบชั่วคราวใน memory เฉพาะตอนรัน OCR เท่านั้น (ดู ocr-strategy.md §4) แล้วทิ้งทันที ไม่ persist ที่ใดทั้งสิ้น (ไม่ใช่ทั้งฝั่ง client และฝั่ง server)
+>
+> field ตรงกับ `Reading` + `ReadingImage` ใน data-model.md (§3.1–3.2) เพื่อให้ map ไป-กลับระหว่าง client/server ตรงกันโดยไม่ต้อง transform ซับซ้อน — ตอน sync สำเร็จ `originalImageBlob` จะถูก upload ขึ้น server แล้ว **server เป็นผู้ตั้งชื่อไฟล์** ตามรูปแบบ `{MeterID}m{MM}_{YYYY}.{ext}` (data-model.md §3.2) ก่อนสร้างเป็น `ReadingImage` record
 
 ---
 
@@ -94,13 +92,14 @@ DRAFT ──(confirm+save, offline)──► PENDING_SYNC ──(กลับ on
 
 ## 6. รูปภาพตอน Offline
 
-- Original Image และ OCR Region ถ่าย/ครอปจากกล้อง → เก็บเป็น `LocalReadingImage[]` (แต่ละตัวมี `Blob` ของตัวเอง) ตรงใน IndexedDB คู่กับ record (ไม่ใช่แค่ path/URL เพราะไม่มี server ให้ upload ตอน offline)
-- เมื่อ sync สำเร็จ: upload แต่ละ Blob ไปยัง server แล้วสร้างเป็น `ReadingImage` record แยกต่อรูป (data-model.md §3.2) จากนั้นลบ Blob ออกจาก IndexedDB เพื่อประหยัดพื้นที่บนมือถือ (object storage provider — ยังไม่กำหนดในเอกสารนี้ เป็นรายละเอียด Phase 0/Infra)
-- ถ้า sync fail ระหว่าง upload รูป: ต้อง retry ทั้ง record (ทุก `LocalReadingImage` ของ reading นั้น ไม่ split เป็น sync ทีละรูป) เพื่อไม่ให้เกิดสถานะครึ่งๆ กลางๆ (มี record แต่ขาด ReadingImage บางประเภท)
+- **เฉพาะ Original Image เท่านั้นที่ถูก persist** — ถ่ายจากกล้องแล้วเก็บเป็น `originalImageBlob` ตรงใน IndexedDB คู่กับ record (ไม่ใช่แค่ path/URL เพราะไม่มี server ให้ upload ตอน offline)
+- **OCR Region ไม่ถูกเก็บที่ไหนเลย แม้ตอน offline** — ระบบ crop บริเวณตัวเลขจาก `originalImageBlob` แบบชั่วคราวใน memory เพื่อรัน OCR (on-device, ดู ocr-strategy.md) ทันทีหลัง crop เสร็จและได้ `ocrValue` แล้ว ข้อมูล crop นั้นจะถูกทิ้ง — ใช้ได้ทั้งตอน online และ offline เพราะ OCR เป็น on-device (ไม่ต้องพึ่ง server)
+- เมื่อ sync สำเร็จ: upload `originalImageBlob` ไปยัง server → **server ตั้งชื่อไฟล์ตามรูปแบบ `{MeterID}m{MM}_{YYYY}.{ext}`** (โดย `MM`/`YYYY` มาจาก `readingMonth` ของ Reading นั้น ไม่ใช่วันที่ sync จริง) แล้วเก็บที่ `public/upload/meter/` (data-model.md §3.2) จากนั้นสร้าง `ReadingImage` record พร้อม `path` ที่ได้ แล้วลบ Blob ออกจาก IndexedDB เพื่อประหยัดพื้นที่บนมือถือ
+- ถ้า sync fail ระหว่าง upload รูป: ต้อง retry ทั้ง record เพื่อไม่ให้เกิดสถานะครึ่งๆ กลางๆ (มี Reading แต่ไม่มี ReadingImage อ้างอิง)
 
 ---
 
 ## 7. จุดที่ยังไม่ตัดสินใจ / นอกขอบเขตเอกสารนี้
 
-- Object storage provider สำหรับเก็บรูปฝั่ง server (S3-compatible, local disk ผ่าน Docker volume ฯลฯ) — เป็นรายละเอียด Phase 0 infra ไม่ใช่ offline architecture
-- ขนาด/quality ของรูปที่บีบอัดก่อนเก็บ (เพื่อประหยัด IndexedDB quota บนมือถือ) — รอทดสอบจริงกับอุปกรณ์เป้าหมาย
+- **Storage backend สำหรับ `public/upload/meter/` บน production**: ตัดสินใจแล้วว่า **ใช้ Coolify Persistent Storage (volume mount)** สำหรับ MVP นี้ — **ยังไม่ใช้ S3/MinIO** (ดู decision-log.md และ tech-stack.md) รายละเอียดการ config volume จริงเป็นงาน infra ที่ยังไม่ implement ในรอบเอกสารนี้
+- ขนาด/quality ของรูปต้นฉบับที่บีบอัดก่อนเก็บ (เพื่อประหยัด IndexedDB quota บนมือถือ และพื้นที่ persistent storage บน production) — รอทดสอบจริงกับอุปกรณ์เป้าหมาย

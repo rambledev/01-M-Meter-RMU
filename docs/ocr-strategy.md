@@ -3,6 +3,7 @@
 > สถานะ: **⏸️ ยังไม่ล็อก provider — รอการยืนยันจากผู้ใช้** (ดู [requirement.md](requirement.md) §5 ข้อ 4)
 > เอกสารนี้เป็นการวิเคราะห์ตัวเลือกเพื่อประกอบการตัดสินใจ ไม่ใช่การเดาหรือ implement ล่วงหน้า
 > อ้างอิง business rules จาก [requirement.md](requirement.md) §3.3 และ [workflow.md](workflow.md) ขั้นตอน 5–6
+> **ปรับปรุง 2026-09-02**: OCR Region/Crop เป็นข้อมูลชั่วคราวใน memory/client เท่านั้น **ไม่ persist ลง server หรือ IndexedDB อีกต่อไป** ไม่ว่าจะเลือก provider ใด (ดู [decision-log.md](decision-log.md))
 
 ---
 
@@ -10,7 +11,7 @@
 
 จาก requirement.md §3.3 และหลักการ "Offline First":
 
-1. ต้องอ่านค่าเฉพาะบริเวณที่ครอปมา (OCR Region) ไม่ใช่ทั้งภาพ
+1. ต้องอ่านค่าเฉพาะบริเวณที่ครอปมา (OCR Region) ไม่ใช่ทั้งภาพ — crop นี้เป็นข้อมูลชั่วคราวใน memory เท่านั้น ไม่ persist ลง server/IndexedDB (ดู §4)
 2. ผลลัพธ์ OCR (OCR Value) ต้องเป็นแค่ค่าเริ่มต้น — ผู้จดต้องแก้ไขได้เสมอก่อน confirm (ไม่ใช่ auto-submit)
 3. **ควรทำงานได้ตอน offline** เพื่อให้ตรงกับ core requirement ทั้งระบบ — ถ้าเลือก provider ที่ต้องพึ่ง API ภายนอก ผู้จดจะบันทึก Reading ได้ตอน offline แต่ **จะไม่มี OCR Value ช่วยกรอกให้ระหว่าง offline** ต้องกรอกค่าด้วยตัวเองล้วนๆ ในสถานการณ์นั้น
 
@@ -62,28 +63,33 @@
 
 ## 4. OCR Pipeline (Architecture — ต้องรองรับไม่ว่าจะเลือก provider ใด)
 
-สถาปัตยกรรมต้องรองรับ pipeline นี้เสมอ โดยไม่ผูกกับ provider เฉพาะเจาะจง:
+สถาปัตยกรรมต้องรองรับ pipeline นี้เสมอ โดยไม่ผูกกับ provider เฉพาะเจาะจง — **ขั้นตอน Crop เป็นข้อมูลชั่วคราวใน memory/client เท่านั้น ไม่มีจุดใดใน pipeline นี้ persist ภาพ crop ลง IndexedDB หรือ server**:
 
 ```
-Original Image (ReadingImage type=ORIGINAL)
+Original Image (persist → ReadingImage, data-model.md §3.2)
         │
         ▼
-OCR Region / Crop (ReadingImage type=OCR_REGION, cropRegion อ้างอิงพิกัดบน Original)
+Crop เฉพาะบริเวณตัวเลข ── ชั่วคราวใน memory/client เท่านั้น (ไม่ persist ที่ใดทั้งสิ้น)
         │
         ▼
 OCR Provider (wrapper กลาง — swap ได้: Tesseract.js on-device / cloud API / hybrid)
         │
         ▼
-OCR Value (Reading.ocrValue — ผลลัพธ์ดิบ)
+OCR Value (Reading.ocrValue — ผลลัพธ์ดิบ, persist)
         │
         ▼
 Manual Correction (ผู้จดแก้ไขได้เสมอ — requirement.md §3.3)
         │
         ▼
-Confirmed Value (Reading.confirmedValue — ค่าที่ใช้จริงในการคำนวณ/รายงาน)
+Confirmed Value (Reading.confirmedValue — ค่าที่ใช้จริงในการคำนวณ/รายงาน, persist)
+        │
+        ▼
+บันทึก Reading + Original Image (ReadingImage) — ไม่มี OCR Crop Image ถูกบันทึกเป็นไฟล์ถาวร
 ```
 
-- `ReadingImage` (data-model.md §3.2) เป็น entity แยกที่เก็บทั้ง `ORIGINAL` และ `OCR_REGION` เป็น record คนละอันภายใต้ `Reading` เดียวกัน (relation 1:N) ไม่ใช่แค่ field เดียวใน `Reading`
+- `ReadingImage` (data-model.md §3.2) เก็บเฉพาะภาพต้นฉบับ (**ORIGINAL เท่านั้น**) — ไม่มี record สำหรับภาพ crop อีกต่อไป (เดิมมี `type=OCR_REGION` แต่ตัดออกแล้วตาม decision-log.md "ไม่จัดเก็บ OCR Crop Image แบบถาวร")
+- การ crop ทำโดยอ่าน pixel ตรงจาก Original Image (`<canvas>`/ImageData ใน browser หรือเทียบเท่าบน native) แล้วส่งเฉพาะ crop นั้นเข้า OCR Provider ทันที — ผลลัพธ์ (`ocrValue`) เท่านั้นที่ persist ต่อ ไม่ใช่ตัวภาพ crop
+- ถ้าต้องตรวจสอบย้อนหลังว่า crop ตอนนั้นมาจากบริเวณไหนของภาพ ให้ crop ใหม่จาก Original Image ที่เก็บไว้ (แทนที่จะเก็บภาพ crop คู่กันไว้ล่วงหน้า)
 - `src/lib/ocr/` เป็น wrapper กลางที่ครอบ engine ที่เลือก เพื่อให้ swap provider ได้ในอนาคตโดยไม่กระทบ UI layer หรือ data model (workflow.md ขั้นตอน 5)
 - `Reading.ocrValue` เป็น `String?` (nullable) — รองรับทั้งกรณี on-device (มีค่าเสมอทันที แม้ offline) และ cloud API (อาจว่างชั่วคราวถ้าเลือกตัวเลือก B/C และ offline ตอนถ่ายภาพ)
 - **มีแนวโน้มใช้ Tesseract.js แบบ on-device** (ตามข้อเสนอ §3) แต่**ยังไม่ต้องบังคับติดตั้งใน Phase 0** — การล็อก provider จริงจะเกิดก่อนเริ่ม Phase 4 เท่านั้น

@@ -39,6 +39,61 @@
 
 ---
 
+## ✅ Decision — ไม่จัดเก็บ OCR Crop Image แบบถาวร (2026-09-02)
+
+**Decision**: ระบบจะ**ไม่จัดเก็บ OCR Crop Image (OCR Region) แบบถาวร**ทั้งที่ server และที่ client (IndexedDB) — เก็บถาวรเฉพาะ **Original Image** (ภาพมิเตอร์เต็มภาพ) เป็นหลักฐาน ส่วน OCR Region เป็นการ crop ที่เกิดขึ้นชั่วคราวใน memory/client ระหว่างประมวลผล OCR เท่านั้น แล้วทิ้งทันทีหลังได้ผลลัพธ์ (`ocrValue`)
+
+**เหตุผล**:
+- ลดพื้นที่จัดเก็บ (storage) ทั้งฝั่ง server และมือถือของผู้จด
+- ลดความซับซ้อนของระบบ (ไม่ต้องมี type/field แยกสำหรับภาพ crop, ไม่ต้องจัดการ sync ภาพ crop แยกจากภาพต้นฉบับ)
+- รูปต้นฉบับ (Original Image) ยังใช้ตรวจสอบย้อนหลังได้เต็มรูปแบบอยู่แล้ว (เป็นหลักฐานที่ครบถ้วนกว่า crop)
+- OCR Crop สามารถสร้างใหม่ได้เสมอจากรูปต้นฉบับ หากในอนาคตต้องตรวจสอบว่า crop ตอนนั้นมาจากบริเวณไหน
+- เหมาะกับ MVP (ลด scope ที่ต้อง implement) และหลักการ Offline-first (ลดขนาดข้อมูลที่ต้อง sync ต่อ Reading)
+
+**ผลกระทบต่อเอกสาร/schema**:
+- `data-model.md` §3.2: ตัด `ReadingImageType` enum และ field `type`/`cropRegion` ออกจาก `ReadingImage` — เหลือแค่ `path` (String) ที่อ้างอิงไฟล์ Original Image เท่านั้น
+- `offline-strategy.md`: `LocalReading` เปลี่ยนจาก `images: LocalReadingImage[]` (มี `type`/`cropRegion`) เป็น `originalImageBlob: Blob` เดี่ยว — ไม่มี crop blob เก็บใน IndexedDB
+- `ocr-strategy.md` §4: OCR Pipeline ระบุชัดว่าขั้นตอน crop เป็น "ชั่วคราวใน memory/client เท่านั้น" ไม่มี persist step ใดๆ สำหรับภาพ crop
+- `requirement.md` §3.3: เปลี่ยนจาก "เก็บ 4 ส่วน" เป็น "เก็บถาวร 3 ส่วน" (Original Image, OCR Value, Confirmed Value)
+
+**การจัดเก็บ Original Image (ยืนยันแล้ว)**:
+- Path: `public/upload/meter/`
+- ชื่อไฟล์: `{MeterID}m{MM}_{YYYY}.{ext}` (เช่น `ME-001m09_2026.jpg`) — **server เป็นผู้สร้างชื่อไฟล์เสมอ**, client ห้ามกำหนดเอง (รูปแบบนี้อัปเดตเพิ่มปี ค.ศ. แล้ว — ดูหัวข้อ "เพิ่มปี ค.ศ. ในชื่อไฟล์รูปภาพมิเตอร์" ด้านล่าง)
+- Database เก็บ path ของไฟล์ (เช่น `/upload/meter/ME-001m09_2026.jpg`) ผ่าน `ReadingImage.path`
+
+**Production Storage**: Deploy ด้วย **Coolify** — ใช้ **Persistent Storage ของ Coolify** (volume mount) สำหรับ `public/upload/meter/` เพื่อป้องกันรูปหายเมื่อ container redeploy **ยังไม่ใช้ S3/MinIO** ในรอบ MVP นี้ (จะประเมินในอนาคตถ้าจำเป็น) — การ config volume จริงยังไม่ implement ในรอบนี้ (เอกสารเท่านั้น)
+
+**สถานะ**: ✅ Locked — เป็น requirement ที่ยืนยันแล้ว ไม่ใช่ข้อเสนอ
+
+---
+
+## ✅ Decision — เพิ่มปี ค.ศ. ในชื่อไฟล์รูปภาพมิเตอร์ (2026-09-02)
+
+**Decision**: เปลี่ยนรูปแบบชื่อไฟล์ Original Image จาก `{MeterID}m{MM}.{ext}` เป็น **`{MeterID}m{MM}_{YYYY}.{ext}`**
+
+**Format**: `{MeterID}m{MM}_{YYYY}.{ext}`
+- `MeterID` = รหัสมิเตอร์ (`Meter.code`)
+- `MM` = เดือนของ `Reading.readingMonth` แบบ 2 หลัก (01–12)
+- `YYYY` = ปี ค.ศ. 4 หลักของ `Reading.readingMonth`
+- `ext` = นามสกุลไฟล์จริง เช่น jpg, jpeg, png
+
+**ตัวอย่าง**:
+- `readingMonth = 2026-09`, `MeterID = ME-001` → `ME-001m09_2026.jpg`
+- `readingMonth = 2026-10`, `MeterID = ME-001` → `ME-001m10_2026.jpg`
+- `readingMonth = 2027-09`, `MeterID = ME-001` → `ME-001m09_2027.jpg`
+
+**Reason**: ป้องกันชื่อไฟล์ซ้ำข้ามปี และทำให้สามารถระบุ Meter, เดือน และปีจากชื่อไฟล์ได้โดยตรง
+
+**กติกาที่ยังคงเดิม** (ไม่เปลี่ยนจาก decision ก่อนหน้า):
+- **Server เป็นผู้สร้างชื่อไฟล์เสมอ** — client ห้ามกำหนดชื่อไฟล์เอง ส่งแค่ binary ภาพ
+- **ชื่อไฟล์สร้างจาก `Reading.readingMonth` ที่ผู้ใช้เลือกเสมอ ไม่ใช่วันที่ upload/sync จริง** — สำคัญมากสำหรับกรณี offline ที่ sync ช้ากว่าวันที่ถ่ายจริง
+
+**ผลกระทบต่อเอกสาร**: `data-model.md` §3.2, `offline-strategy.md` (upload/sync note), `workflow.md` (ตาราง §2), `tech-stack.md` (project structure + risks) — อัปเดตรูปแบบชื่อไฟล์ให้ตรงกันหมดแล้ว และ**ลบคำเตือนเดิมเรื่อง "overwrite ข้ามปี"** ออกจากทุกไฟล์ (แทนที่ด้วยข้อความว่า resolved แล้ว)
+
+**สถานะ**: ✅ Locked — แก้ปัญหา overwrite ข้ามปีที่เคยเป็น open risk ก่อนหน้านี้แล้ว ไม่ใช่ข้อเสนอ
+
+---
+
 ## บริบทการตัดสินใจ (เพื่ออ้างอิง — ไม่ใช่ประเด็นที่ต้องตัดสินใจอีกแล้ว)
 
 ส่วนนี้เก็บผลการตรวจสอบเดิม (2026-09-01) ไว้เพื่อเป็นบริบทว่าทำไมแต่ละรายการถึงมีทางเลือกอื่น แต่ **สถานะทั้งหมดคือ resolved/approved แล้ว** ตามหัวข้อ Locked Decisions ด้านบน
@@ -104,4 +159,8 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 
 **Phase 0 (Project Setup) เสร็จสมบูรณ์แล้ว** — โปรเจกต์ Next.js/TypeScript/Tailwind/Prisma package/Docker ถูกสร้างขึ้นจริงตามที่ approve (ดู `README.md` และรายงาน Phase 0)
 
-**ยังไม่มีการสร้าง Prisma Data Model จริง, ยังไม่มี migration, ยังไม่มี application/business logic ใดๆ, ยังไม่มี git init** — สิ่งเหล่านี้อยู่ใน scope ของ Phase 1 เป็นต้นไป ตามคำสั่งของผู้ใช้ ห้ามเริ่มจนกว่าจะได้รับคำสั่ง "เริ่ม Phase 1"
+**Git/GitHub ตั้งค่าแล้ว** — repo เชื่อมกับ `origin` ที่ https://github.com/rambledev/01-M-Meter-RMU.git และ push commit แรก (`chore: initialize project foundation`) ขึ้น `main` แล้ว (ดูรายละเอียดในรายงาน Phase 0)
+
+**ยังไม่มีการสร้าง Prisma Data Model จริง, ยังไม่มี migration, ยังไม่มี application/business logic ใดๆ** — สิ่งเหล่านี้อยู่ใน scope ของ Phase 1 เป็นต้นไป ตามคำสั่งของผู้ใช้ ห้ามเริ่มจนกว่าจะได้รับคำสั่ง "เริ่ม Phase 1"
+
+**อัปเดต 2026-09-02 (เพิ่มเติมหลัง Phase 0)**: ปรับ requirement เรื่อง OCR Image Storage — ดูหัวข้อ "ไม่จัดเก็บ OCR Crop Image แบบถาวร" ด้านบน เป็นการปรับ documentation/architecture เท่านั้น **ยังไม่ได้แก้ schema จริง ไม่มี migration** (ตรงตามที่ระบุ)

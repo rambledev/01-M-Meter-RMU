@@ -1,6 +1,7 @@
 # Workflow — RMU Meter Collection
 
 > ดู data model ที่รองรับ flow นี้ใน [data-model.md](data-model.md), รายละเอียด offline/sync ใน [offline-strategy.md](offline-strategy.md), รายละเอียด OCR ใน [ocr-strategy.md](ocr-strategy.md) และรายละเอียด export ใน [export-format.md](export-format.md)
+> **ปรับปรุง 2026-09-02**: ขั้นตอน 5 (OCR) — OCR Region เป็นการ crop ชั่วคราวใน memory/client เท่านั้น ไม่ persist เป็นไฟล์ถาวร (ดู [decision-log.md](decision-log.md))
 
 ## 1. Main Flow — ผู้จดมิเตอร์ (METER_READER)
 
@@ -24,8 +25,8 @@
    - เก็บเป็น Original Image (หลักฐาน ห้ามครอปทิ้ง)
 
 5. OCR เฉพาะบริเวณเลขมิเตอร์
-   - ผู้ใช้ (หรือระบบ) กำหนด OCR Region จาก Original Image
-   - รัน OCR เฉพาะ region นั้น → ได้ OCR Value
+   - ผู้ใช้ (หรือระบบ) กำหนด OCR Region จาก Original Image — crop นี้อยู่ใน memory/client ชั่วคราวเท่านั้น ไม่บันทึกเป็นไฟล์
+   - รัน OCR เฉพาะ region นั้น → ได้ OCR Value (เก็บเฉพาะค่าตัวเลขผลลัพธ์ลงฐานข้อมูล ไม่เก็บภาพ crop)
 
 6. ตรวจสอบ
    - แสดง OCR Value ให้ผู้จดตรวจ
@@ -53,9 +54,8 @@
 | Meter ID / Room / Zone | ได้จาก QR (ระบบรู้เอง ไม่ต้องกรอก) |
 | Month | เลือกเดือน (auto-select ปัจจุบัน, ย้อนหลังได้, ห้ามอนาคต) |
 | Previous Reading | Query จาก reading ของเดือนก่อนหน้าเดือนที่เลือก |
-| Original Image | ภาพเต็มจากกล้อง |
-| OCR Region | พิกัด/crop ที่ใช้อ่านค่า |
-| OCR Value | ผลลัพธ์ดิบจาก OCR |
+| Original Image | ภาพเต็มจากกล้อง — **ค่าเดียวที่ persist เป็นไฟล์** เก็บที่ `public/upload/meter/{MeterID}m{MM}_{YYYY}.{ext}` (ดู data-model.md §3.2) |
+| OCR Value | ผลลัพธ์ดิบจาก OCR (ได้จาก crop ชั่วคราวใน memory — **ไม่ persist ตัวภาพ crop**, persist แค่ค่าตัวเลขนี้) |
 | Confirmed Value | ค่าที่ผู้จดตรวจ/แก้ไขแล้ว (ค่าที่ใช้จริงในการคำนวณ/รายงาน) |
 | Sync Status | DRAFT / PENDING_SYNC / SYNCING / SYNCED / SYNC_ERROR |
 | Reader (Role/User ที่จด) | จาก role ที่เลือกใน MVP |
