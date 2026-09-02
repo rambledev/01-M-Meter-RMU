@@ -1,0 +1,12 @@
+// Prisma configuration only — Phase 0 scope.
+// Data model (Zone/Room/Meter/Reading/ReadingImage/User/SyncLog) is defined in Phase 1.
+// See docs/data-model.md for the approved schema design.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
