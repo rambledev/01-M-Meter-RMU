@@ -1,14 +1,366 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import OnlineStatusBadge from "@/components/OnlineStatusBadge";
+import ReadingHistoryList from "@/components/ReadingHistoryList";
+import { demoMeters, demoUser } from "@/lib/meters/demoData";
+import { lookupMeter, type DemoMeter } from "@/lib/meters/meterLookup";
+import type { LocalReading } from "@/lib/offline/db";
+import { getReadings } from "@/lib/offline/readingRepository";
+import {
+  currentMonthValue,
+  isFutureMonth,
+  toReadingMonth,
+} from "@/lib/reading/readingMonth";
+import {
+  checkDuplicateReading,
+  lookupPreviousReading,
+  saveOfflineReading,
+} from "@/lib/reading/readingWorkflow";
+
+function formatMonthThai(monthValue: string): string {
+  const [year, month] = monthValue.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  return new Intl.DateTimeFormat("th-TH-u-ca-buddhist", {
+    year: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 export default function Home() {
+  const [meterCodeInput, setMeterCodeInput] = useState("");
+  const [meter, setMeter] = useState<DemoMeter | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
+  const [monthValue, setMonthValue] = useState(currentMonthValue());
+  const [previousReading, setPreviousReading] = useState<number | undefined>();
+  const [previousFound, setPreviousFound] = useState(false);
+  const [duplicateReading, setDuplicateReading] = useState<
+    LocalReading | undefined
+  >();
+
+  const [currentValueInput, setCurrentValueInput] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedReading, setSavedReading] = useState<LocalReading | null>(null);
+
+  const [history, setHistory] = useState<LocalReading[]>([]);
+
+  const readingMonth = toReadingMonth(monthValue);
+  const currentValueNumber =
+    currentValueInput.trim() === "" ? undefined : Number(currentValueInput);
+  const hasValidCurrentValue =
+    currentValueNumber !== undefined && !Number.isNaN(currentValueNumber);
+  const usage = hasValidCurrentValue
+    ? previousReading !== undefined
+      ? currentValueNumber - previousReading
+      : undefined
+    : undefined;
+  const showLowerThanPreviousWarning =
+    hasValidCurrentValue &&
+    previousReading !== undefined &&
+    currentValueNumber < previousReading;
+
+  async function refreshHistory() {
+    const all = await getReadings();
+    setHistory(
+      [...all].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    );
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const all = await getReadings();
+      if (cancelled) return;
+      setHistory([...all].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Reload Previous Reading + best-effort duplicate check whenever the
+  // selected meter or month changes (requirement.md §3.1, §3.2). Nothing
+  // downstream reads these values while `meter` is null (all guarded by
+  // `{meter && (...)}` below), so there is nothing to reset synchronously.
+  useEffect(() => {
+    if (!meter) return;
+    let cancelled = false;
+    (async () => {
+      const [prev, dup] = await Promise.all([
+        lookupPreviousReading(meter.id, readingMonth),
+        checkDuplicateReading(meter.id, readingMonth),
+      ]);
+      if (cancelled) return;
+      setPreviousReading(prev.value);
+      setPreviousFound(prev.found);
+      setDuplicateReading(dup);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [meter, readingMonth]);
+
+  function selectMeter(next: DemoMeter) {
+    setMeter(next);
+    setMeterCodeInput(next.code);
+    setLookupError(null);
+    setMonthValue(currentMonthValue());
+    setCurrentValueInput("");
+    setSaveError(null);
+    setSavedReading(null);
+  }
+
+  function handleLookup() {
+    const found = lookupMeter(meterCodeInput);
+    if (!found) {
+      setMeter(null);
+      setLookupError("ไม่พบมิเตอร์รหัสนี้");
+      return;
+    }
+    selectMeter(found);
+  }
+
+  function handleMonthChange(value: string) {
+    if (isFutureMonth(value)) {
+      setSaveError("ห้ามเลือกเดือนอนาคต");
+      return;
+    }
+    setSaveError(null);
+    setSavedReading(null);
+    setMonthValue(value);
+  }
+
+  const canSave =
+    meter !== null &&
+    hasValidCurrentValue &&
+    !isFutureMonth(monthValue) &&
+    !duplicateReading &&
+    !savedReading;
+
+  async function handleConfirmSave() {
+    if (!meter || currentValueNumber === undefined) return;
+    setSaveError(null);
+    try {
+      const { reading } = await saveOfflineReading({
+        meterId: meter.id,
+        readingMonth,
+        recordedBy: demoUser.id,
+        previousReading,
+        confirmedValue: currentValueNumber,
+      });
+      setSavedReading(reading);
+      setCurrentValueInput("");
+      await refreshHistory();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+    }
+  }
+
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 px-6 py-16 text-center dark:bg-black">
-      <main className="flex w-full max-w-sm flex-col items-center gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-          RMU Meter Collection
-        </h1>
-        <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Project foundation (Phase 0) พร้อมใช้งาน — ยังไม่มี workflow จดมิเตอร์จริงในเวอร์ชันนี้
-        </p>
-      </main>
+    <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
+      <header className="flex items-center justify-between">
+        <h1 className="text-lg font-bold">RMU Meter Collection</h1>
+        <OnlineStatusBadge />
+      </header>
+
+      {/* Meter lookup */}
+      <section className="flex flex-col gap-2">
+        <label className="text-sm font-semibold" htmlFor="meter-code">
+          Meter Code / Scan
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="meter-code"
+            className="flex-1 rounded-lg border border-zinc-300 px-3 py-3 text-base dark:border-zinc-700 dark:bg-zinc-900"
+            placeholder="เช่น ME-001 หรือ METER:ME-001"
+            value={meterCodeInput}
+            onChange={(e) => setMeterCodeInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleLookup();
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleLookup}
+            className="shrink-0 rounded-lg bg-zinc-900 px-4 py-3 font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            ค้นหา
+          </button>
+        </div>
+        {lookupError && (
+          <p className="text-sm font-medium text-red-600">{lookupError}</p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <span className="self-center text-xs text-zinc-500">
+            เลือกจาก Demo:
+          </span>
+          {demoMeters.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => selectMeter(m)}
+              className={`rounded-full border px-3 py-1 text-sm ${
+                meter?.id === m.id
+                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                  : "border-zinc-300 dark:border-zinc-700"
+              }`}
+            >
+              {m.code}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {meter && (
+        <>
+          {/* Meter info */}
+          <section className="rounded-xl bg-zinc-100 p-4 dark:bg-zinc-900">
+            <p className="text-xl font-bold">{meter.code}</p>
+            <p className="text-zinc-600 dark:text-zinc-400">
+              {meter.room.name}
+            </p>
+            <p className="text-zinc-600 dark:text-zinc-400">
+              {meter.room.zone.name}
+            </p>
+          </section>
+
+          {/* Reading month */}
+          <section className="flex flex-col gap-1">
+            <label className="text-sm font-semibold" htmlFor="reading-month">
+              เดือนอ่าน
+            </label>
+            <input
+              id="reading-month"
+              type="month"
+              max={currentMonthValue()}
+              value={monthValue}
+              onChange={(e) => handleMonthChange(e.target.value)}
+              className="rounded-lg border border-zinc-300 px-3 py-3 text-base dark:border-zinc-700 dark:bg-zinc-900"
+            />
+            <p className="text-sm text-zinc-500">{formatMonthThai(monthValue)}</p>
+          </section>
+
+          {savedReading ? (
+            <section className="flex flex-col gap-3 rounded-xl border border-green-400 bg-green-50 p-4 text-sm text-green-900">
+              <p className="text-base font-semibold">
+                บันทึกสำเร็จ — สถานะ {savedReading.status}
+              </p>
+              <p>ครั้งก่อน: {savedReading.previousReading ?? "-"}</p>
+              <p>ครั้งนี้: {savedReading.confirmedValue ?? "-"}</p>
+              <p>ใช้ไป: {savedReading.usage ?? "-"} หน่วย</p>
+              <button
+                type="button"
+                onClick={() => setSavedReading(null)}
+                className="self-start rounded-lg bg-green-700 px-4 py-2 font-semibold text-white"
+              >
+                ปิด
+              </button>
+            </section>
+          ) : duplicateReading ? (
+            <section className="rounded-xl border border-amber-400 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">
+                มีการบันทึกมิเตอร์นี้ในเดือนนี้แล้ว
+              </p>
+              <p className="mt-1">
+                ค่าที่เคยบันทึก: {duplicateReading.confirmedValue ?? "-"}
+              </p>
+              <p>
+                ผู้บันทึก:{" "}
+                {duplicateReading.recordedBy === demoUser.id
+                  ? demoUser.name
+                  : duplicateReading.recordedBy}
+              </p>
+              <p>
+                วันที่บันทึก:{" "}
+                {duplicateReading.recordedAt
+                  ? new Date(duplicateReading.recordedAt).toLocaleString(
+                      "th-TH",
+                    )
+                  : "-"}
+              </p>
+            </section>
+          ) : (
+            <>
+              {/* Previous reading */}
+              <section className="flex flex-col gap-1">
+                <p className="text-sm font-semibold">ครั้งก่อน</p>
+                <p className="text-2xl font-bold">
+                  {previousFound ? previousReading : "ไม่พบค่าครั้งก่อน"}
+                </p>
+              </section>
+
+              {/* Current reading */}
+              <section className="flex flex-col gap-1">
+                <label
+                  className="text-sm font-semibold"
+                  htmlFor="current-value"
+                >
+                  ครั้งนี้
+                </label>
+                <input
+                  id="current-value"
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={currentValueInput}
+                  onChange={(e) => setCurrentValueInput(e.target.value)}
+                  className="rounded-lg border border-zinc-300 px-3 py-3 text-xl dark:border-zinc-700 dark:bg-zinc-900"
+                  placeholder="กรอกค่ามิเตอร์ปัจจุบัน"
+                />
+              </section>
+
+              {showLowerThanPreviousWarning && (
+                <p className="rounded-lg bg-red-100 px-3 py-2 text-sm font-semibold text-red-700">
+                  ค่าที่กรอกน้อยกว่าค่าครั้งก่อน โปรดตรวจสอบอีกครั้ง
+                </p>
+              )}
+
+              {usage !== undefined && (
+                <p className="text-lg">
+                  ใช้ไป <span className="font-bold">{usage}</span> หน่วย
+                </p>
+              )}
+
+              {/* Confirmation card */}
+              <section className="flex flex-col gap-1 rounded-xl border border-zinc-300 p-4 text-sm dark:border-zinc-700">
+                <p className="mb-1 font-semibold">ตรวจสอบก่อนบันทึก</p>
+                <p>Meter: {meter.code}</p>
+                <p>ห้อง: {meter.room.name}</p>
+                <p>Zone: {meter.room.zone.name}</p>
+                <p>เดือน: {formatMonthThai(monthValue)}</p>
+                <p>ค่าครั้งก่อน: {previousFound ? previousReading : "-"}</p>
+                <p>ค่าครั้งนี้: {hasValidCurrentValue ? currentValueNumber : "-"}</p>
+                <p>หน่วยที่ใช้: {usage ?? "-"}</p>
+                <p>สถานะ: PENDING_SYNC (จนกว่าจะ sync สำเร็จ)</p>
+                <p className="mt-1 italic text-zinc-500">
+                  ยังไม่ได้แนบภาพ — จะเพิ่มใน Phase 4
+                </p>
+              </section>
+
+              <button
+                type="button"
+                disabled={!canSave}
+                onClick={handleConfirmSave}
+                className="rounded-lg bg-green-600 px-4 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
+              >
+                ตรวจสอบและบันทึก
+              </button>
+
+              {saveError && (
+                <p className="text-sm font-medium text-red-600">{saveError}</p>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* History */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold">ประวัติที่บันทึกในเครื่อง</h2>
+        <ReadingHistoryList readings={history} />
+      </section>
     </div>
   );
 }

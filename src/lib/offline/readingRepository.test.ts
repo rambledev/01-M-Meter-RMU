@@ -4,6 +4,7 @@ import {
   addReadingImage,
   createDraftReading,
   deleteDraftReading,
+  findReadingByMeterAndMonth,
   getReading,
   getReadingImages,
   getReadings,
@@ -59,6 +60,35 @@ describe("updateReading", () => {
     await expect(
       updateReading("does-not-exist", { status: "SYNCED" }),
     ).rejects.toThrow();
+  });
+});
+
+describe("findReadingByMeterAndMonth", () => {
+  it("finds the reading for a specific meter and month only", async () => {
+    const target = await createDraftReading({
+      meterId: "meter-1",
+      readingMonth: "2026-08-01",
+      recordedBy: "user-1",
+    });
+    await createDraftReading({
+      meterId: "meter-1",
+      readingMonth: "2026-09-01", // different month, same meter
+      recordedBy: "user-1",
+    });
+    await createDraftReading({
+      meterId: "meter-2",
+      readingMonth: "2026-08-01", // same month, different meter
+      recordedBy: "user-1",
+    });
+
+    const found = await findReadingByMeterAndMonth("meter-1", "2026-08-01");
+
+    expect(found?.localId).toBe(target.localId);
+  });
+
+  it("returns undefined when there is no reading for that meter+month", async () => {
+    const found = await findReadingByMeterAndMonth("meter-1", "2026-08-01");
+    expect(found).toBeUndefined();
   });
 });
 

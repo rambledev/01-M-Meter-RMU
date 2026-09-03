@@ -57,6 +57,21 @@ export async function getReadings(filter?: {
   return db.readings.toArray();
 }
 
+// Used for both the Previous Reading lookup (requirement.md §3.1: the reading
+// from the calendar month right before the selected one, never just "latest")
+// and the client-side best-effort duplicate check (requirement.md §3.2) — the
+// server's `@@unique([meterId, readingMonth])` remains the real source of
+// truth once Phase 5 syncs this record.
+export async function findReadingByMeterAndMonth(
+  meterId: string,
+  readingMonth: string,
+): Promise<LocalReading | undefined> {
+  return db.readings
+    .where("[meterId+readingMonth]")
+    .equals([meterId, readingMonth])
+    .first();
+}
+
 // Only DRAFT readings can be discarded — anything past confirm must go through
 // the sync/error flow instead (workflow.md §3), not be silently deleted.
 export async function deleteDraftReading(localId: string): Promise<void> {
