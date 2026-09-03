@@ -191,6 +191,20 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 
 ---
 
+## ✅ Phase 2 — Offline-first Data Layer: Implementation Decisions (2026-09-03)
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| **ID strategy: ไม่แก้ Prisma schema** — ใช้ `localId` (client-generated, `crypto.randomUUID()`) แยกจาก `serverId` (เติมทีหลังหลัง sync) | ตรวจ `prisma/schema.prisma` แล้วพบว่า `Reading.id` เป็น `String @id @default(cuid())` — เป็น string ธรรมดา ไม่ใช่ auto-increment/sequence จึงไม่มีข้อจำกัดทางเทคนิคที่บังคับให้ client ต้อง "เดา" ค่า id ที่ server จะใช้ การแยก `localId`/`serverId` (ตามที่ offline-strategy.md ออกแบบไว้ตั้งแต่แรก) แก้ปัญหา ID ชนกันได้ครบโดยไม่ต้องเปลี่ยน schema ใดๆ — **ไม่ใช่ architectural decision ใหม่** เป็นการยืนยันว่าดีไซน์เดิมเพียงพอแล้ว |
+| `readingImages` แยกเป็น Dexie table ต่างหาก (ไม่ embed `originalImageBlob` ใน `LocalReading` ตามตัวอย่างเดิมใน offline-strategy.md) | Mirror ความสัมพันธ์ 1:N ระหว่าง `Reading`↔`ReadingImage` บนฝั่ง server (data-model.md §3.2) ได้ตรงกว่า — ตัวอย่างเดิมใน offline-strategy.md ระบุไว้ชัดเจนว่าเป็นแค่ตัวอย่าง ("ยังไม่สร้างไฟล์จริง") ไม่ใช่ locked design จึงปรับได้โดยไม่ถือเป็นการเปลี่ยน architecture ที่ล็อกไว้ |
+| เพิ่ม dev dependency `vitest` + `fake-indexeddb` สำหรับเทส | จำเป็นต่อการเขียน test ตามที่สั่ง (Dexie/IndexedDB ไม่มีใน Node โดย native — `fake-indexeddb` คือ polyfill มาตรฐานของวงการสำหรับเทส Dexie นอก browser) — ไม่ใช่ tech stack ที่ล็อกไว้ใน decision-log (Next/React/TS/Tailwind/Prisma) จึงไม่ขัดกับ locked decisions |
+| Repository functions เป็น plain async function ล้วน ไม่มี class/interface/DI abstraction | ตรงตามหลัก "อย่า over-engineer, อย่าสร้าง abstraction หลายชั้น" ที่ผู้ใช้ระบุใน Phase 2 kickoff |
+| Sync Queue repository (`syncQueueRepository.ts`) มีแค่ data structure + CRUD (`enqueueForSync`, `getQueueItem`, `getPendingQueueItems`, `updateQueueItem`) | ไม่มี network call, retry logic, หรือ conflict resolution ใดๆ ตามที่สั่งชัดเจนว่ายังไม่ต้องทำใน Phase 2 — เตรียมพร้อมให้ Phase 5 ใช้งานต่อเท่านั้น |
+
+**สถานะ**: ✅ ไม่มี architectural decision ใหม่ที่ขัดกับของเดิม — เป็นการ implement ตาม design ที่ล็อกไว้แล้ว บวกกับ 1 การยืนยัน (ID strategy) และ 1 การปรับ implementation detail (แยก readingImages table) ที่ไม่กระทบ business rule ใดๆ
+
+---
+
 ## สถานะ Coding
 
 **Phase 0 (Project Setup) เสร็จสมบูรณ์แล้ว** — โปรเจกต์ Next.js/TypeScript/Tailwind/Prisma package/Docker ถูกสร้างขึ้นจริงตามที่ approve (ดู `README.md` และรายงาน Phase 0)
@@ -200,3 +214,7 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 **อัปเดต 2026-09-02 (เพิ่มเติมหลัง Phase 0)**: ปรับ requirement เรื่อง OCR Image Storage — ดูหัวข้อ "ไม่จัดเก็บ OCR Crop Image แบบถาวร" ด้านบน เป็นการปรับ documentation/architecture เท่านั้น **ยังไม่ได้แก้ schema จริง ไม่มี migration** (ตรงตามที่ระบุ)
 
 **Phase 1 (Core Data Model) — schema สร้างแล้ว, ยังไม่ migrate**: `prisma/schema.prisma` มี model ครบ (Zone/Room/Meter/Reading/ReadingImage/User/SyncLog) ตรงกับ data-model.md แล้ว, `npx prisma validate` และ `npx prisma generate` ผ่านทั้งคู่ (ไม่แตะ database จริง) — **ยังไม่รัน `prisma migrate`/`db push`/`db pull` ใดๆ ทั้งสิ้น** และ**ยังไม่ seed ข้อมูลลง PostgreSQL จริง** ตามคำสั่งของผู้ใช้ รอการตรวจสอบ schema จากผู้ใช้ก่อนทำ migration หรือเริ่ม Phase 2
+
+**Phase 1 — Migration Applied (2026-09-03)**: `CREATE DATABASE rmu_meter` + initial migration (`20260902094529_init`) apply สำเร็จบน PostgreSQL จริง (202.29.22.92:8024) — ตาราง/enum/index/FK ครบตาม schema, ไม่มีข้อมูล application ใดๆ (0 rows ทุกตาราง), commit แล้วขึ้น `main`
+
+**Phase 2 (Offline-first Data Layer) เสร็จแล้ว**: Dexie.js + `src/lib/offline/{db,readingRepository,syncQueueRepository}.ts` implement ตาม offline-strategy.md, test ผ่านครบ (`npm test`), typecheck/lint/build ผ่าน — ยังไม่มี UI/Camera/OCR/API/Auto-sync เรียกใช้งานจริง (Phase 3 เป็นต้นไป) ไม่มี architectural decision ใหม่ที่ขัดกับของเดิม (ดูหัวข้อด้านบน)

@@ -1,10 +1,11 @@
 # Offline Architecture — RMU Meter Collection
 
-> สถานะ: **Architecture Specification เท่านั้น — ยังไม่ install Dexie.js หรือเขียนโค้ดใดๆ**
+> สถานะ: **Phase 2 — implemented.** Dexie.js ติดตั้งแล้ว, `src/lib/offline/{db,readingRepository,syncQueueRepository}.ts` สร้างจริงแล้วพร้อม test (`npm test` ผ่าน) ยังไม่มี UI/Camera/OCR/API/Auto-sync เรียกใช้งาน (Phase 3 เป็นต้นไป)
 > อ้างอิง business rules จาก [requirement.md](requirement.md) §3.4 และ [workflow.md](workflow.md) §3
 > เชื่อมโยงกับ [data-model.md](data-model.md) — schema ฝั่ง client (IndexedDB) mirror บางส่วนของ Prisma schema ฝั่ง server
 > **ปรับปรุง 2026-09-02**: เก็บเฉพาะ Original Image ใน IndexedDB — ไม่มี OCR Crop Blob อีกต่อไป (crop เป็นข้อมูลชั่วคราวใน memory เท่านั้น ดู [decision-log.md](decision-log.md))
 > **ปรับปรุงเพิ่มเติม 2026-09-02**: ชื่อไฟล์ที่ server ตั้งตอน sync สำเร็จเปลี่ยนเป็น `{MeterID}m{MM}_{YYYY}.{ext}` (เพิ่มปี ค.ศ. กันชื่อซ้ำข้ามปี)
+> **ปรับปรุง Phase 2 (2026-09-03)**: `readingImages` แยกเป็น table ต่างหาก (ไม่ embed ใน `LocalReading`) — ดู §2.2
 
 ---
 
@@ -23,41 +24,59 @@
 
 ### 2.2 โครง Table ฝั่ง client (Dexie schema)
 
+> **Implemented Phase 2 (2026-09-03)**: `src/lib/offline/db.ts` — ปรับจากตัวอย่างเดิม (embed `originalImageBlob` ไว้ใน `LocalReading` โดยตรง) เป็น **แยก table `readingImages` ต่างหาก** เพื่อให้ mirror ความสัมพันธ์ 1:N ระหว่าง `Reading`↔`ReadingImage` บนฝั่ง server (data-model.md §3.2) ตรงกว่า — ดูเหตุผลใน decision-log.md
+
 ```ts
-// src/lib/offline/db.ts (ตัวอย่างโครงสร้าง — ยังไม่สร้างไฟล์จริง)
-class LocalDB extends Dexie {
+// src/lib/offline/db.ts
+class LocalDatabase extends Dexie {
   readings!: Table<LocalReading, string>;
+  readingImages!: Table<LocalReadingImage, string>;
   syncQueue!: Table<SyncQueueItem, string>;
 }
 
 interface LocalReading {
-  localId: string;            // client-generated id (uuid) — ใช้ก่อนมี server id
+  localId: string;            // client-generated id (crypto.randomUUID()) — ใช้ก่อนมี server id
   serverId?: string;          // เติมทีหลังเมื่อ sync สำเร็จ
   meterId: string;
   readingMonth: string;       // ISO date string ของวันที่ 1 ของเดือน
   previousReading?: number;   // snapshot ณ เวลา confirm (mirror ของ Reading.previousReading, data-model.md §3.1)
-  originalImageBlob: Blob;    // ภาพต้นฉบับเต็มภาพเท่านั้น — เก็บรูปจริงไว้ในเครื่องจนกว่าจะ SYNCED (mirror ของ ReadingImage ใน data-model.md §3.2)
   ocrValue?: string;
-  confirmedValue: number;
+  confirmedValue?: number;    // nullable ตอน DRAFT/ก่อน confirm (mirror ของ Reading.confirmedValue, data-model.md §5)
   usage?: number;             // confirmedValue - previousReading ณ เวลา confirm (mirror ของ Reading.usage)
   status: "DRAFT" | "PENDING_SYNC" | "SYNCING" | "SYNCED" | "SYNC_ERROR";
   recordedBy: string;
-  recordedAt: string;         // business timestamp ตอน confirm — แยกจาก createdAt (เวลาที่ record เขียนลง DB จริง)
+  recordedAt?: string;        // business timestamp ตอน confirm — แยกจาก createdAt (เวลาที่ record เขียนลง DB จริง) — nullable จนกว่าจะ confirm
   createdAt: string;
+  updatedAt: string;
   lastSyncError?: string;
 }
 
+// แยก table ต่างหาก (ไม่ embed ใน LocalReading) — mirror ReadingImage 1:N บน server
+interface LocalReadingImage {
+  localId: string;
+  localReadingId: string;     // FK → LocalReading.localId
+  blob: Blob;                 // Original Image เท่านั้น — เก็บรูปจริงไว้ในเครื่องจนกว่าจะ SYNCED
+  mimeType: string;
+  createdAt: string;
+}
+
 interface SyncQueueItem {
-  localId: string;      // FK → LocalReading.localId
-  attempts: number;
-  lastAttemptAt?: string;
+  id: string;
+  readingId: string;          // FK → LocalReading.localId
+  action: "CREATE" | "UPDATE";
+  status: "DRAFT" | "PENDING_SYNC" | "SYNCING" | "SYNCED" | "SYNC_ERROR";
+  retryCount: number;
   lastError?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 ```
 
-> **ไม่มี OCR crop blob เก็บใน IndexedDB** — OCR Region ถูก crop จาก `originalImageBlob` แบบชั่วคราวใน memory เฉพาะตอนรัน OCR เท่านั้น (ดู ocr-strategy.md §4) แล้วทิ้งทันที ไม่ persist ที่ใดทั้งสิ้น (ไม่ใช่ทั้งฝั่ง client และฝั่ง server)
+> **ไม่มี OCR crop blob เก็บใน IndexedDB** — OCR Region ถูก crop จาก Original Image แบบชั่วคราวใน memory เฉพาะตอนรัน OCR เท่านั้น (ดู ocr-strategy.md §4) แล้วทิ้งทันที ไม่ persist ที่ใดทั้งสิ้น (ไม่ใช่ทั้งฝั่ง client และฝั่ง server)
 >
-> field ตรงกับ `Reading` + `ReadingImage` ใน data-model.md (§3.1–3.2) เพื่อให้ map ไป-กลับระหว่าง client/server ตรงกันโดยไม่ต้อง transform ซับซ้อน — ตอน sync สำเร็จ `originalImageBlob` จะถูก upload ขึ้น server แล้ว **server เป็นผู้ตั้งชื่อไฟล์** ตามรูปแบบ `{MeterID}m{MM}_{YYYY}.{ext}` (data-model.md §3.2) ก่อนสร้างเป็น `ReadingImage` record
+> field ตรงกับ `Reading` + `ReadingImage` ใน data-model.md (§3.1–3.2) เพื่อให้ map ไป-กลับระหว่าง client/server ตรงกันโดยไม่ต้อง transform ซับซ้อน — ตอน sync สำเร็จ blob ใน `readingImages` จะถูก upload ขึ้น server แล้ว **server เป็นผู้ตั้งชื่อไฟล์** ตามรูปแบบ `{MeterID}m{MM}_{YYYY}.{ext}` (data-model.md §3.2) ก่อนสร้างเป็น `ReadingImage` record
+>
+> **UI เรียกผ่าน repository เท่านั้น** — `src/lib/offline/readingRepository.ts` (`createDraftReading`, `updateReading`, `getReading`, `getReadings`, `deleteDraftReading`, `addReadingImage`, `getReadingImages`) และ `src/lib/offline/syncQueueRepository.ts` (`enqueueForSync`, `getQueueItem`, `getPendingQueueItems`, `updateQueueItem` — data structure/CRUD เท่านั้น ยังไม่มี network/retry logic จริง รอ Phase 5)
 
 ---
 
