@@ -35,6 +35,12 @@ export default function BillingBreakdownPanel({
         <span className="font-semibold">{baht(breakdown.total)}</span>
       </div>
 
+      {breakdown.usage !== null && (
+        <p className="text-xs text-zinc-500">
+          สูตรเบื้องต้นจากเอกสารตัวอย่าง สามารถปรับอัตราได้ที่ตั้งค่าการคิดค่าไฟ
+        </p>
+      )}
+
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

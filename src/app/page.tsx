@@ -261,9 +261,14 @@ export default function Home() {
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">RMU Meter Collection</h1>
-        <OnlineStatusBadge />
+      <header className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-bold">ระบบเก็บมิเตอร์ (RMU Meter Collection)</h1>
+          <OnlineStatusBadge />
+        </div>
+        <p className="text-sm text-zinc-500">
+          ระบบอ่านและจัดเก็บข้อมูลมิเตอร์ไฟฟ้า รองรับการทำงาน Offline และ Sync เมื่อกลับมา Online
+        </p>
       </header>
 
       {/* Sync */}
@@ -319,22 +324,29 @@ export default function Home() {
         {lookupError && (
           <p className="text-sm font-medium text-red-600">{lookupError}</p>
         )}
+        <p className="text-xs text-zinc-500">เลือกมิเตอร์ตัวอย่าง (Demo):</p>
         <div className="flex flex-wrap gap-2">
-          <span className="self-center text-xs text-zinc-500">
-            เลือกจาก Demo:
-          </span>
           {demoMeters.map((m) => (
             <button
               key={m.id}
               type="button"
               onClick={() => selectMeter(m)}
-              className={`rounded-full border px-3 py-1 text-sm ${
+              className={`flex flex-col items-start rounded-xl border px-3 py-2 text-left ${
                 meter?.id === m.id
                   ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
                   : "border-zinc-300 dark:border-zinc-700"
               }`}
             >
-              {m.code}
+              <span className="text-sm font-semibold">{m.code}</span>
+              <span
+                className={`text-xs ${
+                  meter?.id === m.id
+                    ? "text-zinc-300 dark:text-zinc-600"
+                    : "text-zinc-500"
+                }`}
+              >
+                {m.room.name} · {m.room.zone.name}
+              </span>
             </button>
           ))}
         </div>
@@ -519,6 +531,15 @@ export default function Home() {
                     <p>หน่วยที่ใช้: {usage ?? "-"}</p>
                     <p>สถานะ: PENDING_SYNC (จนกว่าจะ sync สำเร็จ)</p>
                     <p className="mt-1 text-zinc-500">ภาพ: แนบแล้ว ✓</p>
+                    {billingConfig && hasValidCurrentValue && (
+                      <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                        <BillingBreakdownPanel
+                          confirmedValue={currentValueNumber}
+                          previousReading={previousFound ? (previousReading ?? null) : null}
+                          config={billingConfig}
+                        />
+                      </div>
+                    )}
                   </section>
 
                   <button
