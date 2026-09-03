@@ -240,6 +240,38 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 
 ---
 
+## ✅ Phase 5 — MVP Sync: Implementation Decisions (2026-09-03)
+
+**การตัดสินใจที่ขอ approve จากผู้ใช้ก่อนทำ (ได้รับอนุมัติแล้ว)**:
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| **Seed ข้อมูล Zone/Room/Meter/User เข้า PostgreSQL จริง** (`prisma/seed.cjs`, id ตรงกับ `demoData.ts` เป๊ะ: `zone-a/b`, `room-101/102/201`, `ME-001/002/003`, `demo-user-1`) | ตรวจพบว่า database จริงมี 0 rows ทุกตาราง — demo data เดิมมีแค่ฝั่ง client (Phase 3) การ sync จะ fail 100% ด้วย "Meter ไม่พบ"/"User ไม่พบ" ทุกครั้งถ้าไม่มี row เหล่านี้ในฐานจริง เป็น**เงื่อนไขจำเป็น**ที่ทำให้ Phase 5 demo ได้เลย ไม่ใช่ทางเลือก — **หยุดถามผู้ใช้ก่อนแล้วจึงรัน** (ต่างจาก Phase 1 ที่ "ห้าม seed" เพราะตอนนั้นเป็น schema-only phase ยังไม่มี sync feature ให้ seed รองรับ) |
+
+**Implementation decisions อื่นๆ**:
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| Manual sync trigger (ปุ่ม "Sync ข้อมูล") แทน auto-trigger ตอนกลับ online | ผู้ใช้ระบุชัดเจนที่ Phase 5 kickoff ว่า "ยังไม่ต้องทำ automatic background sync" — offline-strategy.md §4 อัปเดตแล้วว่า auto-trigger เป็นแผนอนาคต ไม่ใช่ Phase 5 |
+| Sync API: `POST /api/readings/sync` รับ `multipart/form-data` (field `reading` = JSON string, field `image` = File) แทน JSON + base64 | รองรับไฟล์ภาพโดยตรงไม่ต้อง encode/decode base64 (เพิ่ม ~33% payload โดยไม่จำเป็น) — Next.js Route Handler อ่าน `request.formData()` ได้ built-in ไม่ต้องเพิ่ม dependency |
+| Transaction/atomicity: สร้าง `Reading` ก่อน → เขียนไฟล์ภาพ → สร้าง `ReadingImage` — ถ้าขั้นไหนหลัง `Reading` ถูกสร้างแล้ว fail ให้ **ลบ `Reading` (และไฟล์ถ้าเขียนไปแล้ว) แบบ compensating rollback** แทนการทำ true distributed transaction | Prisma `$transaction` ครอบคลุมแค่ DB ไม่ครอบคลุม `fs.writeFile` — ทำ true atomic (เช่น 2-phase commit) เกินความจำเป็นสำหรับ MVP demo ตามที่ผู้ใช้อนุญาตไว้ชัดเจน ("ถ้าต้องเลือกระหว่าง architecture ซับซ้อนกับง่าย ให้เลือกง่าย") ผลคือไม่มี `Reading` แบบไม่มีรูปหลงเหลือใน DB เงียบๆ (ตรงตามข้อกำหนด item 4) — worst case ที่เหลือคือไฟล์ orphan บน disk ถ้า DB step ที่ 2 (`ReadingImage`) fail หลังเขียนไฟล์ไปแล้ว (โอกาสเกิดต่ำมาก, ไม่กระทบความถูกต้องของข้อมูลใน DB) |
+| Duplicate จาก server (`409 DUPLICATE`): client set local reading เป็น `SYNCED` ทันที (ไม่ retry, ไม่ error) | ทางเลือกที่ง่ายที่สุดตามที่อนุญาตไว้ ("ให้เลือกแนวทางที่ง่ายที่สุดและสอดคล้องกับ repository ปัจจุบัน") — ข้อมูลมีอยู่บน server แล้วจริง (แค่มาจาก sync attempt อื่น/device อื่น) จึงถือว่า "sync สำเร็จ" จาก mental model ของผู้ใช้ ไม่ใช่ error ที่ต้องแก้ไข |
+| Sync queue "completed" = update `status: "SYNCED"` (ไม่ได้ลบ row ออกจาก IndexedDB) | ใช้ `updateQueueItem()` ที่มีอยู่แล้วจาก Phase 2 แทนการเพิ่มฟังก์ชัน delete ใหม่ — `getPendingQueueItems()` filter เฉพาะ `PENDING_SYNC`/`SYNC_ERROR` อยู่แล้ว จึงได้ผลลัพธ์เดียวกับ "remove" ในทางปฏิบัติ |
+| ยังไม่ลบ `originalImageBlob` ออกจาก IndexedDB หลัง `SYNCED` | offline-strategy.md §3 เคยเสนอไว้เป็น optimization ("ได้" ไม่ใช่ "ต้อง") — deferred เพื่อความง่าย ไม่กระทบความถูกต้อง แค่ใช้พื้นที่ IndexedDB มากกว่าที่จำเป็นเล็กน้อย |
+| ไม่ทำ Service Worker / Web Worker / background sync ใดๆ | ตรงตามข้อห้ามที่ระบุชัดเจนใน Phase 5 kickoff |
+
+**สถานะ**: ✅ ล็อกแล้วหลังยืนยันจากผู้ใช้ (การ seed) — ไม่มี architectural decision อื่นที่ขัดกับของเดิม, ไม่แก้ unique constraint เดิม, ไม่แก้ Prisma `Reading.id`
+
+**ทดสอบจริงด้วย Playwright ต่อ PostgreSQL จริง** (`202.29.22.92:8024/rmu_meter`):
+- **Online**: สร้าง reading (ME-001) → sync → PostgreSQL มี `Reading`+`ReadingImage` จริง, ไฟล์ `/upload/meter/ME-001m09_2026.jpg` อยู่บน disk จริง
+- **Offline→Online**: ปิด network จริงผ่าน Playwright → สร้าง reading (ME-002, offline) → `PENDING_SYNC` → เปิด network → กด Sync → `SYNCED` → reload หน้า → ข้อมูลยังอยู่ถูกต้อง
+- **Duplicate**: browser context ที่ 2 (IndexedDB คนละตัว จำลอง "อีกเครื่อง") สร้าง reading ซ้ำ meter+month เดิมกับที่ sync ไปแล้ว → server ตอบ 409 DUPLICATE → **ไม่มี row ที่ 3 ถูกสร้างใน PostgreSQL** (ตรวจนับแล้ว: 2 readings ไม่ใช่ 3) → client set เป็น SYNCED เอง
+- **previousReading/usage**: สร้าง reading เดือน ก.ค. (ME-003, ไม่มี previous) แล้วเดือน ส.ค. (มี previous) → sync ทั้งคู่ → ตรวจ PostgreSQL ยืนยัน `previousReading=200, confirmedValue=260, usage=60` ถูกต้องครบ
+
+⚠️ **ข้อมูลทดสอบยังคงอยู่ใน PostgreSQL จริงหลัง test** (4 Reading rows: ME-001/ME-002/ME-003×2 + ไฟล์ภาพ 4 ไฟล์ใน `public/upload/meter/`) — ตั้งใจไม่ลบทิ้งเพื่อให้ตรวจสอบได้ตามที่ Phase 5 spec ข้อ 15 ต้องการ ("หลัง browser test ให้ตรวจ PostgreSQL โดยตรง") รอผู้ใช้ยืนยันว่าจะให้ลบก่อนเริ่ม Phase 6 หรือไม่
+
+---
+
 ## สถานะ Coding
 
 **Phase 0 (Project Setup) เสร็จสมบูรณ์แล้ว** — โปรเจกต์ Next.js/TypeScript/Tailwind/Prisma package/Docker ถูกสร้างขึ้นจริงตามที่ approve (ดู `README.md` และรายงาน Phase 0)
@@ -257,3 +289,5 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 **Phase 3 (Meter Reading Workflow) เสร็จแล้ว**: หน้าหลัก (`src/app/page.tsx`) ใช้งานได้ครบ Meter lookup → Month → Previous Reading → Current Reading → Duplicate check → Confirm → Save Offline → History ยืนยันด้วย Playwright จริงรวมถึงกรณี offline — ทดสอบ 29 tests ผ่าน, typecheck/lint/build ผ่าน ยังไม่มี Camera/OCR/API/Auto-sync (Phase 4 เป็นต้นไป)
 
 **Phase 4 (Camera + OCR) เสร็จแล้ว**: Tesseract.js locked + implement จริง, Camera capture พร้อม permission/error handling + file fallback, OCR แยกจาก confirmedValue อย่างเคร่งครัด, เก็บเฉพาะ Original Image (ไม่มี crop ถูก persist) — ยืนยันด้วย Playwright จริงรวมถึง OCR อ่านค่าได้ถูกต้องจากภาพทดสอบ — ทดสอบ 35 tests ผ่าน, typecheck/lint/build ผ่าน ยังไม่มี Auto Sync/API upload (Phase 5 เป็นต้นไป)
+
+**Phase 5 (MVP Sync) เสร็จแล้ว**: seed reference data เข้า PostgreSQL จริง (อนุมัติแล้ว), API `/api/readings/sync` + client `syncService.ts` ทำงานครบ Online/Offline→Online/Duplicate — ยืนยันด้วย Playwright จริงต่อ PostgreSQL จริง (ไม่ใช่ mock): Reading+ReadingImage ถูกสร้างจริง, duplicate ไม่ซ้ำจริง, previousReading/usage ถูกต้องจริง — ทดสอบ 40 tests ผ่าน, typecheck/lint/build ผ่าน ยังไม่มี Auto/Background Sync, Excel, Billing, Dashboard (Phase 6 เป็นต้นไป) — **มีข้อมูลทดสอบค้างอยู่ใน PostgreSQL จริง** ดูหัวข้อ Phase 5 ด้านบนสำหรับรายละเอียดและขอคำยืนยันเรื่องการลบ

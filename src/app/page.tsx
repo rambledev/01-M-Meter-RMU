@@ -9,6 +9,7 @@ import { demoMeters, demoUser } from "@/lib/meters/demoData";
 import { lookupMeter, type DemoMeter } from "@/lib/meters/meterLookup";
 import type { LocalReading } from "@/lib/offline/db";
 import { getReadings } from "@/lib/offline/readingRepository";
+import { getPendingQueueItems } from "@/lib/offline/syncQueueRepository";
 import { recognizeMeterValue } from "@/lib/ocr/ocrProvider";
 import {
   currentMonthValue,
@@ -20,6 +21,7 @@ import {
   lookupPreviousReading,
   saveOfflineReading,
 } from "@/lib/reading/readingWorkflow";
+import { syncPendingReadings } from "@/lib/sync/syncService";
 
 function formatMonthThai(monthValue: string): string {
   const [year, month] = monthValue.split("-").map(Number);
@@ -60,6 +62,9 @@ export default function Home() {
   const [savedReading, setSavedReading] = useState<LocalReading | null>(null);
 
   const [history, setHistory] = useState<LocalReading[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const readingMonth = toReadingMonth(monthValue);
   const currentValueNumber =
@@ -83,17 +88,44 @@ export default function Home() {
     );
   }
 
+  async function refreshPendingCount() {
+    const pending = await getPendingQueueItems();
+    setPendingCount(pending.length);
+  }
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const all = await getReadings();
+      const [all, pending] = await Promise.all([
+        getReadings(),
+        getPendingQueueItems(),
+      ]);
       if (cancelled) return;
       setHistory([...all].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+      setPendingCount(pending.length);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  async function handleSync() {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const { succeeded, failed } = await syncPendingReadings();
+      if (failed === 0) {
+        setSyncMessage(`Sync สำเร็จ ${succeeded} รายการ`);
+      } else if (succeeded === 0) {
+        setSyncMessage(`Sync ไม่สำเร็จ ${failed} รายการ`);
+      } else {
+        setSyncMessage(`Sync สำเร็จ ${succeeded} รายการ, ไม่สำเร็จ ${failed} รายการ`);
+      }
+      await Promise.all([refreshHistory(), refreshPendingCount()]);
+    } finally {
+      setIsSyncing(false);
+    }
+  }
 
   // Reload Previous Reading + best-effort duplicate check whenever the
   // selected meter or month changes (requirement.md §3.1, §3.2). Nothing
@@ -218,7 +250,7 @@ export default function Home() {
       setSavedReading(reading);
       setCurrentValueInput("");
       resetPhoto();
-      await refreshHistory();
+      await Promise.all([refreshHistory(), refreshPendingCount()]);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
     }
@@ -230,6 +262,32 @@ export default function Home() {
         <h1 className="text-lg font-bold">RMU Meter Collection</h1>
         <OnlineStatusBadge />
       </header>
+
+      {/* Sync */}
+      {(pendingCount > 0 || syncMessage) && (
+        <section className="flex flex-col gap-2 rounded-xl border border-zinc-300 p-3 dark:border-zinc-700">
+          {pendingCount > 0 && (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              มีข้อมูลรอส่ง {pendingCount} รายการ
+            </p>
+          )}
+          {pendingCount > 0 && (
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
+            >
+              {isSyncing ? "กำลัง Sync..." : "Sync ข้อมูล"}
+            </button>
+          )}
+          {syncMessage && (
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              {syncMessage}
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Meter lookup */}
       <section className="flex flex-col gap-2">

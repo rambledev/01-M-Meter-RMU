@@ -45,3 +45,7 @@ next-env.d.ts
 # prisma (generated client lives in node_modules, already ignored above)
 prisma/*.db
 prisma/migrations/dev/
+
+# user-uploaded meter photos (runtime data, not source — created by the sync
+# API at src/app/api/readings/sync/route.ts)
+/public/upload/

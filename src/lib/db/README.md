@@ -1,7 +1,7 @@
 # src/lib/db
 
-Server-side data access layer (Repository boundary) backed by Prisma + PostgreSQL 17.
+Server-side data access layer — Prisma client singleton (`prisma.ts`), used
+only from API routes (`src/app/api/**`), never imported by client components.
 
-Not implemented yet — reserved for Phase 1. The Prisma client singleton and
-repository functions will be added once the real schema exists
-(see `docs/data-model.md` and `prisma/schema.prisma`).
+See `docs/data-model.md` for the schema and `src/app/api/readings/sync/route.ts`
+for the one endpoint that uses it so far (Phase 5).

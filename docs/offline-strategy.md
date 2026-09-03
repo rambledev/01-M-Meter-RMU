@@ -90,16 +90,17 @@ DRAFT ──(confirm+save, offline)──► PENDING_SYNC ──(กลับ on
 - **DRAFT**: ผู้ใช้ยังไม่กด confirm — ไม่เข้า sync queue
 - **PENDING_SYNC**: confirm แล้วแต่ตอนบันทึกไม่มีเน็ต — เข้า sync queue รอ
 - **SYNCING**: กำลังส่งขึ้น server (มี network event listener ตรวจจับตอนกลับ online แล้ว trigger อัตโนมัติ — ไม่ต้องรอผู้ใช้กด)
-- **SYNCED**: server ยืนยันบันทึกสำเร็จ → ลบ `originalImageBlob` ออกจาก IndexedDB ได้ (ประหยัดพื้นที่ เพราะรูปอยู่บน server แล้ว)
+- **SYNCED**: server ยืนยันบันทึกสำเร็จ → ลบ `originalImageBlob` ออกจาก IndexedDB ได้ (ประหยัดพื้นที่ เพราะรูปอยู่บน server แล้ว) — **ยังไม่ implement ใน Phase 5** (MVP เก็บ blob ไว้ต่อแม้ SYNCED แล้ว) เป็น optimization ที่ deferred ไว้ ไม่กระทบความถูกต้องของข้อมูล
 - **SYNC_ERROR**: server ปฏิเสธ (เช่น duplicate ที่ device อื่น sync ไปก่อนแล้ว) หรือ network error ระหว่างส่ง → เก็บ `lastError` ไว้ให้ผู้ใช้/แอดมินเห็น ไม่ fail เงียบๆ (workflow.md §3)
 
 ---
 
-## 4. Auto-sync Trigger
+## 4. Sync Trigger
 
-- ใช้ `window.addEventListener("online", ...)` ร่วมกับ `navigator.onLine` เป็นตัวเริ่มต้นเช็ค
-- เสริมด้วย periodic health-check (เช่น ping endpoint เบาๆ ทุก N วินาทีตอน foreground) เพราะ `online` event ของ browser บางครั้งไม่แม่นยำ 100% (เช่น ต่อ wifi ที่ไม่มี internet จริง)
-- เมื่อ trigger sync: ดึงรายการทั้งหมดที่ status = `PENDING_SYNC` หรือ `SYNC_ERROR` (retry) จาก `syncQueue` เรียงตาม `createdAt` แล้วส่งทีละรายการ (ไม่ parallel ทั้งหมด เพื่อลดโอกาส duplicate/race condition ที่ server)
+> **ปรับปรุง Phase 5 (2026-09-03)**: MVP นี้เป็น **manual trigger** (ปุ่ม "Sync ข้อมูล" บนหน้าหลัก) ไม่ใช่ auto-trigger ตอนกลับ online ตามที่ร่างไว้เดิม — ผู้ใช้กำหนดชัดเจนใน Phase 5 kickoff ว่ายังไม่ต้องทำ background/automatic sync ("ยังไม่ต้องทำ automatic background sync") เพื่อให้ demo ควบคุมจังหวะ sync ได้ง่าย ส่วน auto-trigger ตาม design เดิมด้านล่างยังคงเป็นแผนสำหรับอนาคต ไม่ใช่ scope ของ Phase 5
+
+- **Implemented (Phase 5)**: `src/lib/sync/syncService.ts` — `syncPendingReadings()` เรียกจากปุ่ม "Sync ข้อมูล" เท่านั้น ดึง `getPendingQueueItems()` (สถานะ `PENDING_SYNC`/`SYNC_ERROR`) แล้วส่งทีละรายการเรียงตาม `createdAt` (ไม่ parallel — ลด race condition ที่ server) ตรงตาม design เดิมด้านล่างทุกประการ ยกเว้นวิธี trigger
+- **แผนเดิม (ยังไม่ implement)**: ใช้ `window.addEventListener("online", ...)` ร่วมกับ `navigator.onLine` + periodic health-check เพื่อ auto-trigger sync ทันทีที่กลับมา online โดยผู้ใช้ไม่ต้องกดเอง — deferred ไปทำใน phase ถัดไปถ้าจำเป็น
 
 ---
 
