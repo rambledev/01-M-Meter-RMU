@@ -10,6 +10,19 @@ const sampleRow: ExportRow = {
   currentValue: 260,
   previousValue: 200,
   usage: 60,
+  baseCharge: 130,
+  ftCharge: 30,
+  tax: 16,
+  total: 176,
+};
+
+const noPreviousRow: ExportRow = {
+  seq: 2,
+  roomName: "ห้อง 102",
+  residentName: "",
+  currentValue: 50,
+  previousValue: null,
+  usage: null,
   baseCharge: null,
   ftCharge: null,
   tax: null,
@@ -44,7 +57,23 @@ describe("buildMeterBillingWorkbook", () => {
     expect(sheet.getCell(8, 4).value).toBe(260);
     expect(sheet.getCell(8, 5).value).toBe(200);
     expect(sheet.getCell(8, 6).value).toBe(60);
-    expect(sheet.getCell(8, 7).value).toBe("-"); // billing formula not implemented
+    expect(sheet.getCell(8, 7).value).toBe(130); // ค่าไฟพื้นฐาน from the Calculation Service
+    expect(sheet.getCell(8, 10).value).toBe(176); // รวมทั้งสิ้น
+  });
+
+  it("renders '-' placeholders for a row with no previous reading (usage/billing unknown)", async () => {
+    const buffer = await buildMeterBillingWorkbook({
+      monthLabel: "กันยายน 2569",
+      rows: [noPreviousRow],
+    });
+    const workbook = new ExcelJS.Workbook();
+    // @ts-expect-error see comment above
+    await workbook.xlsx.load(Buffer.from(buffer));
+    const sheet = workbook.worksheets[0];
+
+    expect(sheet.getCell(8, 5).value).toBe("-"); // ครั้งก่อน
+    expect(sheet.getCell(8, 6).value).toBe("-"); // หน่วยที่ใช้
+    expect(sheet.getCell(8, 7).value).toBe("-"); // ค่าไฟพื้นฐาน
   });
 
   it("does not throw when there are zero rows", async () => {

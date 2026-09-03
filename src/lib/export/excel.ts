@@ -77,7 +77,7 @@ export async function buildMeterBillingWorkbook(
 
   sheet.mergeCells(4, 1, 4, COLUMN_COUNT);
   sheet.getCell(4, 1).value =
-    "อัตราค่าไฟพื้นฐาน / ค่า FT / ภาษี: ยังไม่มีสูตรคำนวณค่าไฟจริง (แสดงเป็น \"-\") — ดู docs/export-format.md";
+    "อัตราค่าไฟที่ใช้เป็นสูตรเบื้องต้นจากเอกสารตัวอย่าง ยังไม่ใช่สูตรทางการที่ได้รับการรับรอง — ปรับได้ที่หน้าตั้งค่าการคิดค่าไฟ (แถวที่ไม่มีค่าครั้งก่อนจะแสดงเป็น \"-\")";
   sheet.getCell(4, 1).alignment = { horizontal: "center" };
   sheet.getCell(4, 1).font = { size: 10, italic: true, color: { argb: "FF999999" } };
 

@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import type { BillingConfig } from "@/lib/billing/types";
 import { buildExportFilename } from "@/lib/export/filename";
 import { currentMonthValue, formatMonthThai } from "@/lib/reading/readingMonth";
 
 // Item 6 of the Phase 6 spec: pick a month, then export — no separate
 // dashboard/report page.
-export default function ExportExcelButton() {
+export default function ExportExcelButton({
+  billingConfig,
+}: {
+  billingConfig: BillingConfig | null;
+}) {
   const [monthValue, setMonthValue] = useState(currentMonthValue());
   const [isExporting, setIsExporting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -15,7 +20,16 @@ export default function ExportExcelButton() {
     setIsExporting(true);
     setMessage(null);
     try {
-      const res = await fetch(`/api/export?month=${monthValue}`);
+      // Phase 6B: pass the current (possibly user-edited) billing config so
+      // Excel uses the exact same rates the Reading detail/breakdown panels
+      // just showed on screen — the server falls back to its own default
+      // config if this is missing (Calculation Service stays the single
+      // source of truth either way).
+      const params = new URLSearchParams({ month: monthValue });
+      if (billingConfig) {
+        params.set("config", JSON.stringify(billingConfig));
+      }
+      const res = await fetch(`/api/export?${params.toString()}`);
       const contentType = res.headers.get("content-type") ?? "";
 
       if (contentType.includes("application/json")) {

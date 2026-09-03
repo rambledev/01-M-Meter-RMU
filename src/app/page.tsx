@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import BillingBreakdownPanel from "@/components/BillingBreakdownPanel";
+import BillingExplanation from "@/components/BillingExplanation";
+import BillingSettingsPanel from "@/components/BillingSettingsPanel";
 import CameraCapture from "@/components/CameraCapture";
 import ExportExcelButton from "@/components/ExportExcelButton";
 import OnlineStatusBadge from "@/components/OnlineStatusBadge";
 import ReadingHistoryList from "@/components/ReadingHistoryList";
+import type { BillingConfig } from "@/lib/billing/types";
 import { compressImage } from "@/lib/image/compressImage";
 import { demoMeters, demoUser } from "@/lib/meters/demoData";
 import { lookupMeter, type DemoMeter } from "@/lib/meters/meterLookup";
+import { getBillingConfig } from "@/lib/offline/billingConfigRepository";
 import type { LocalReading } from "@/lib/offline/db";
 import { getReadings } from "@/lib/offline/readingRepository";
 import { getPendingQueueItems } from "@/lib/offline/syncQueueRepository";
@@ -57,6 +62,12 @@ export default function Home() {
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  const [billingConfig, setBillingConfig] = useState<BillingConfig | null>(null);
+
+  useEffect(() => {
+    getBillingConfig().then(setBillingConfig);
+  }, []);
 
   const readingMonth = toReadingMonth(monthValue);
   const currentValueNumber =
@@ -366,6 +377,13 @@ export default function Home() {
               <p>ครั้งก่อน: {savedReading.previousReading ?? "-"}</p>
               <p>ครั้งนี้: {savedReading.confirmedValue ?? "-"}</p>
               <p>ใช้ไป: {savedReading.usage ?? "-"} หน่วย</p>
+              {billingConfig && savedReading.confirmedValue !== undefined && (
+                <BillingBreakdownPanel
+                  confirmedValue={savedReading.confirmedValue}
+                  previousReading={savedReading.previousReading ?? null}
+                  config={billingConfig}
+                />
+              )}
               <button
                 type="button"
                 onClick={() => setSavedReading(null)}
@@ -527,10 +545,14 @@ export default function Home() {
       {/* History */}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">ประวัติที่บันทึกในเครื่อง</h2>
-        <ReadingHistoryList readings={history} />
+        <ReadingHistoryList readings={history} billingConfig={billingConfig} />
       </section>
 
-      <ExportExcelButton />
+      {billingConfig && <BillingExplanation config={billingConfig} />}
+
+      <BillingSettingsPanel onSaved={setBillingConfig} />
+
+      <ExportExcelButton billingConfig={billingConfig} />
     </div>
   );
 }

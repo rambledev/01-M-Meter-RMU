@@ -300,6 +300,37 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 
 ---
 
+## ✅ Phase 6B — Billing Calculation + Settings + Explanation: Implementation Decisions (2026-09-03)
+
+**บริบท**: Phase 6 ทิ้ง `calculateBilling()` เป็น stub คืน null ทั้งหมดไว้ตั้งใจ (ไม่มีสูตรจริง) — Phase 6B เติมสูตรจริงเข้ามา แต่ผู้ใช้ระบุชัดเจนว่านี่คือ **"สูตรเบื้องต้นที่แกะจากเอกสารตัวอย่าง" ไม่ใช่สูตรทางการ** และห้าม hard-code ตัวเลขนี้ใน Calculation Logic — ต้องเก็บเป็น "Billing Configuration" ที่ปรับได้
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| แยก `src/lib/billing/` (types/defaultConfig/tierValidation/explanation/breakdown) ออกจาก `src/lib/export/calculation.ts` (Calculation Service เดิม) | Calculation Service รับ `BillingConfig` เป็น parameter เท่านั้น ไม่มีตัวเลขอัตราใดๆ ฝังอยู่ในไฟล์นั้นเลย — ตัวเลขจริงมีที่เดียวคือ `defaultConfig.ts` ตรงตามคำสั่ง "ห้าม hard-code ค่าเหล่านี้ใน Calculation Logic" |
+| ค่าไฟพื้นฐาน = ค่าฐานคงที่ + ผลรวมตามช่วงอัตราแบบ progressive/graduated bracket มาตรฐาน (เหมือนขั้นบันไดภาษีเงินได้) | ผู้ใช้สั่งชัดเจนว่า "หากสูตร Progressive Tier แบบทั่วไปไม่สามารถ reproduce ตัวเลขในเอกสารได้พอดี อย่าฝืนแก้สูตรเพื่อให้ Test ผ่าน" — เลือก implementation ที่ง่ายและตรงไปตรงมาที่สุด ไม่ปรับแต่งให้ตรงกับตัวอย่างในเอกสารเป๊ะ |
+| ไม่มี previousReading → billing ทั้งชุด (`baseCharge/ft/tax/total`) เป็น null ทั้งหมด ไม่ใช่แค่ `usage` | ค่าไฟพื้นฐานมีทั้งส่วนคงที่และส่วนตาม usage ผสมกัน — ถ้าโชว์แค่ส่วนคงที่ทั้งที่ไม่รู้ usage จริง จะทำให้เข้าใจผิดว่าเป็นบิลที่คำนวณได้ครบ จึงเลือกงดแสดงทั้งชุดแทน (เหมือนแนวทาง placeholder เดิมจาก Phase 6) |
+| Billing Configuration เก็บใน Dexie table ใหม่ `billingConfig` (single-row, key `"singleton"`) ผ่าน `db.version(2)` ใหม่ (คง `version(1)` เดิมไว้ไม่แก้) | ตรงตามคำสั่ง "ห้ามเพิ่ม Prisma model ห้าม migration ใหม่" — ใช้ IndexedDB (Dexie) ที่มีอยู่แล้วจาก Phase 2, เพิ่ม version ใหม่แบบ non-destructive ต่อข้อมูลเดิม |
+| Export ส่ง billing config จาก client ไปเป็น query param `config` (JSON) แทนที่จะให้ server มี config เป็นของตัวเอง | Billing Configuration เก็บใน IndexedDB (client-only, browser storage) — server (Next.js route, Node) เข้าถึง IndexedDB ไม่ได้ วิธีเดียวที่ทำให้ Excel กับหน้าเว็บใช้ "Calculation Service เดียวกันด้วยค่า config เดียวกัน" (ตามคำสั่ง "ห้ามมีสูตรค่าไฟอีกชุดหนึ่งใน Excel route") คือส่ง config ปัจจุบันแนบไปกับ request — ไม่ใช่สูตรที่สอง เป็นแค่ parameter เดียวกันที่ส่งข้ามชั้น client/server |
+| Server fallback เป็น `DEFAULT_BILLING_CONFIG` เมื่อ query param `config` หายไปหรือ parse ไม่ได้ (ไม่ error) | เป็น enhancement ไม่ใช่ required input — ปลอดภัยกว่าการ fail export ทั้งหมดเพราะ query param เสีย/หาย ยังคงเรียก `calculateBilling()` ตัวเดียวกันเสมอ |
+| tier สุดท้ายบังคับเป็น "ไม่จำกัด" (maxUnit=null) เสมอผ่าน UI logic ไม่ใช่ checkbox ให้ผู้ใช้เลือกเอง | ลดโอกาสที่ผู้ใช้ตั้งค่าผิดจน validateTiers() reject — ตรงตามคำสั่ง "กำหนด tier สุดท้ายเป็นไม่จำกัด" โดยไม่ต้องเพิ่ม UI ควบคุมซับซ้อน |
+| ข้อความอธิบาย (`buildBillingExplanation`) และ breakdown (`buildBillingBreakdown`) เป็น pure function แยกจาก React component | unit-test ได้อิสระโดยไม่ต้อง render UI จริง — ตรงตาม requirement "explanation ใช้ค่าจาก config ปัจจุบัน" ที่ต้องพิสูจน์ได้ด้วย test |
+
+**บั๊กที่พบระหว่าง browser test (เป็นปัญหาของ test script ไม่ใช่โค้ดแอป)**: การถ่าย screenshot แบบ `fullPage: true` ทันทีก่อนกดปุ่ม "บันทึกการตั้งค่า" ทำให้ click ถัดไปไม่ทำงาน (Chromium ต้อง resize/restore viewport ตอน fullPage screenshot แล้วมี race กับ action ถัดไป) — reproduce ได้แน่ชัดด้วยสคริปต์แยก (มี/ไม่มี screenshot ก่อนกด) ผลต่างชัดเจน — แก้โดยย้าย screenshot ไปถ่ายหลังกดปุ่มแทน ไม่ใช่การแก้โค้ดแอป
+
+**ทดสอบจริงด้วย Playwright ต่อ PostgreSQL จริง**:
+- สร้าง Reading เดือนก่อน (ME-001, 200) และเดือนนี้ (ME-001, 260, previousReading=200 → usage=60) → เห็นค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นทันทีบน saved-reading card (baseCharge=107.75, ft=5.83, tax=7.95, total=121.53 ที่ DEFAULT_BILLING_CONFIG)
+- เปิด "ดูวิธีคำนวณ" เห็น breakdown ตาม tier จริง, เปิด "อธิบายการคิดค่าไฟ" เห็นสูตรที่ generate จาก config ปัจจุบัน
+- Sync ทั้งสอง reading ขึ้น PostgreSQL จริงสำเร็จ
+- แก้ FT=0.5, ภาษี=15%, อัตราช่วงแรก=9.99 ใน Settings → กด "บันทึกการตั้งค่า" → ข้อความยืนยันขึ้นจริง
+- กด "คืนค่าเริ่มต้น" → FT กลับเป็น 0.0972 ตามเดิม
+- Export Excel → เปิดไฟล์ .xlsx จริงด้วย exceljs ตรวจแถวข้อมูล: `baseCharge=107.75, ft=5.832, tax=7.9507..., total=121.53274` — **ตรงกับตัวเลขที่คำนวณบนหน้าเว็บเป๊ะ** ยืนยันว่า Excel กับ UI ใช้ Calculation Service + config เดียวกันจริง
+- Console/page errors: ไม่มี (`[]`)
+- หลังทดสอบ: ลบ Reading/ReadingImage ทดสอบ (2 แถว) และไฟล์ภาพทั้ง 2 ไฟล์ออกจาก PostgreSQL/disk ตามที่ผู้ใช้ยืนยัน — DB กลับสู่ 0 Reading
+
+**สถานะ**: ✅ ไม่มี Prisma migration/model ใหม่, ไม่มี Invoice/PDF/Accounting/Payment/Admin permission/Background job/Cloud storage/Authentication/Dashboard ใหม่ — ตรงตามข้อห้ามทั้งหมดของ Phase 6B, สูตรค่าไฟยังคงระบุชัดเจนว่าเป็น "สูตรเบื้องต้นจากเอกสารตัวอย่าง" ไม่ใช่สูตรทางการทั้งใน UI และ Excel
+
+---
+
 ## สถานะ Coding
 
 **Phase 0 (Project Setup) เสร็จสมบูรณ์แล้ว** — โปรเจกต์ Next.js/TypeScript/Tailwind/Prisma package/Docker ถูกสร้างขึ้นจริงตามที่ approve (ดู `README.md` และรายงาน Phase 0)
@@ -321,3 +352,5 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 **Phase 5 (MVP Sync) เสร็จแล้ว**: seed reference data เข้า PostgreSQL จริง (อนุมัติแล้ว), API `/api/readings/sync` + client `syncService.ts` ทำงานครบ Online/Offline→Online/Duplicate — ยืนยันด้วย Playwright จริงต่อ PostgreSQL จริง (ไม่ใช่ mock): Reading+ReadingImage ถูกสร้างจริง, duplicate ไม่ซ้ำจริง, previousReading/usage ถูกต้องจริง — ทดสอบ 40 tests ผ่าน, typecheck/lint/build ผ่าน ยังไม่มี Auto/Background Sync, Excel, Billing, Dashboard (Phase 6 เป็นต้นไป) — ข้อมูลทดสอบถูกลบออกหมดแล้วก่อนเริ่ม Phase 6
 
 **Phase 6 (Excel Export MVP) เสร็จแล้ว**: `/api/export?month=YYYY-MM` query PostgreSQL จริง (Reading→Meter→Room→Zone) สร้างไฟล์ `.xlsx` ด้วย exceljs ตรงตาม format ที่กำหนด (title, group header 2 ชั้น, border/numFmt/freeze/autoFilter), Calculation Service (`src/lib/export/calculation.ts`) แยกจาก Excel layout ชัดเจน, `calculateUsage()` ใช้สูตร lock เดิม, `calculateBilling()` เป็น placeholder null ทั้งหมด (ไม่มีสูตรค่าไฟจริง ตามคำสั่ง) — ยืนยันด้วย Playwright จริงต่อ PostgreSQL จริง: สร้าง Reading → Sync → Export → เปิดไฟล์จริงตรวจค่าถูกต้องครบ, ทดสอบ path ไม่มีข้อมูลได้ข้อความที่ถูกต้อง — ทดสอบ 56 tests ผ่าน, typecheck/lint/build ผ่าน ไม่มี billing formula จริง/accounting system/PDF/Dashboard/Admin/Resident/Advanced report/Scheduled export/Email/Cloud storage — ข้อมูลทดสอบถูกลบออกหมดแล้วหลัง browser test (ผู้ใช้ยืนยัน)
+
+**Phase 6B (Billing Calculation + Settings + Explanation) เสร็จแล้ว**: `calculateBilling()` มีสูตรจริงแล้ว (ยังเป็น "สูตรเบื้องต้นจากเอกสารตัวอย่าง" ไม่ใช่สูตรทางการ) ผ่าน Billing Configuration ที่เก็บใน IndexedDB (`src/lib/offline/billingConfigRepository.ts`, ไม่มี Prisma migration ใหม่) และแก้ไขได้จาก UI ใหม่ 3 ส่วน (`BillingSettingsPanel`, `BillingExplanation`, `BillingBreakdownPanel`) — Excel export ใช้ Calculation Service + config เดียวกับ UI จริง (ส่งผ่าน query param ไม่ใช่สูตรที่สอง) — ยืนยันด้วย Playwright จริงต่อ PostgreSQL จริง: สร้าง Reading → เห็นบิล → ดูวิธีคำนวณ/อธิบาย → Sync → แก้ FT/ภาษี/อัตรา → บันทึก → ผลเปลี่ยน → Reset → Export Excel → ตัวเลขใน Excel ตรงกับหน้าเว็บเป๊ะ — ทดสอบ 97 tests ผ่าน, typecheck/lint/build ผ่าน ไม่มี Prisma migration/Invoice/PDF/Accounting/Payment/Admin permission/Background job/Cloud storage/Authentication/Dashboard ใหม่ — ข้อมูลทดสอบถูกลบออกหมดแล้วหลัง browser test (ผู้ใช้ยืนยัน)

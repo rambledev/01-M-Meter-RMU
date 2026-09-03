@@ -1,4 +1,5 @@
-import { calculateBilling, calculateUsage } from "./calculation";
+import type { BillingConfig } from "@/lib/billing/types";
+import { calculateBilling } from "./calculation";
 
 export interface ExportRow {
   seq: number;
@@ -35,16 +36,17 @@ function toNumberOrNull(value: unknown): number | null {
 }
 
 // Row mapping calls the Calculation Service for every derived value —
-// no usage/billing math happens inline here (Phase 6 spec item 5).
+// no usage/billing math happens inline here (Phase 6 spec item 5), and the
+// billing rates always come from the caller's config (Phase 6B), never
+// hard-coded here.
 export function mapReadingToRow(
   reading: ReadingForExport,
   seq: number,
+  config: BillingConfig,
 ): ExportRow {
   const confirmedValue = toNumberOrNull(reading.confirmedValue);
   const previousReading = toNumberOrNull(reading.previousReading);
-  const usage =
-    confirmedValue !== null ? calculateUsage(confirmedValue, previousReading) : null;
-  const billing = calculateBilling(usage);
+  const billing = calculateBilling(confirmedValue, previousReading, config);
 
   return {
     seq,
@@ -52,9 +54,9 @@ export function mapReadingToRow(
     residentName: reading.meter.room.residentName ?? "",
     currentValue: confirmedValue,
     previousValue: previousReading,
-    usage,
+    usage: billing.usage,
     baseCharge: billing.baseCharge,
-    ftCharge: billing.ftCharge,
+    ftCharge: billing.ft,
     tax: billing.tax,
     total: billing.total,
   };

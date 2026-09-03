@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { DEFAULT_BILLING_CONFIG } from "@/lib/billing/defaultConfig";
 import { prisma } from "@/lib/db/prisma";
 import { buildMeterBillingWorkbook } from "@/lib/export/excel";
 import { buildExportFilename } from "@/lib/export/filename";
 import { mapReadingToRow } from "@/lib/export/mapReadingToRow";
+import { parseBillingConfigParam } from "@/lib/export/parseBillingConfigParam";
 import { parseMonthParam } from "@/lib/export/monthParam";
 import { formatMonthThai } from "@/lib/reading/readingMonth";
 
@@ -38,7 +40,16 @@ export async function GET(request: Request) {
     );
   }
 
-  const rows = readings.map((reading, index) => mapReadingToRow(reading, index + 1));
+  // Phase 6B: the client sends its current billing config (possibly edited
+  // via Settings) so this route uses the exact same rates the user just saw
+  // on screen. Missing/malformed -> fall back to the default config; still
+  // the same calculateBilling() call either way, never a second formula.
+  const billingConfig =
+    parseBillingConfigParam(searchParams.get("config")) ?? DEFAULT_BILLING_CONFIG;
+
+  const rows = readings.map((reading, index) =>
+    mapReadingToRow(reading, index + 1, billingConfig),
+  );
   const buffer = await buildMeterBillingWorkbook({
     monthLabel: formatMonthThai(month),
     rows,

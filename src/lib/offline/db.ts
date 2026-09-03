@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import type { BillingConfig } from "@/lib/billing/types";
 
 // Mirrors Prisma's ReadingStatus enum (prisma/schema.prisma) — do not add new values here
 // without updating the server schema first (see docs/data-model.md).
@@ -53,10 +54,18 @@ export interface SyncQueueItem {
   updatedAt: string;
 }
 
+// Single-row store — this app has one shared billing configuration, not
+// per-user config (no login/multi-tenant concept in this MVP).
+export interface LocalBillingConfig extends BillingConfig {
+  id: "singleton";
+  updatedAt: string;
+}
+
 class LocalDatabase extends Dexie {
   readings!: Table<LocalReading, string>;
   readingImages!: Table<LocalReadingImage, string>;
   syncQueue!: Table<SyncQueueItem, string>;
+  billingConfig!: Table<LocalBillingConfig, string>;
 
   constructor() {
     super("rmu-meter-offline");
@@ -64,6 +73,14 @@ class LocalDatabase extends Dexie {
       readings: "localId, serverId, meterId, status, [meterId+readingMonth]",
       readingImages: "localId, localReadingId",
       syncQueue: "id, readingId, status",
+    });
+    // Phase 6B: added billingConfig — existing stores are unchanged so this
+    // upgrades in place for browsers that already have version 1 data.
+    this.version(2).stores({
+      readings: "localId, serverId, meterId, status, [meterId+readingMonth]",
+      readingImages: "localId, localReadingId",
+      syncQueue: "id, readingId, status",
+      billingConfig: "id",
     });
   }
 }

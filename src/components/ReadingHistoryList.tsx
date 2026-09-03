@@ -1,3 +1,5 @@
+import BillingBreakdownPanel from "@/components/BillingBreakdownPanel";
+import type { BillingConfig } from "@/lib/billing/types";
 import type { LocalReading } from "@/lib/offline/db";
 import { findMeterById } from "@/lib/meters/meterLookup";
 import { resolveRecorderName } from "@/lib/meters/demoData";
@@ -13,8 +15,10 @@ const STATUS_LABEL: Record<LocalReading["status"], string> = {
 
 export default function ReadingHistoryList({
   readings,
+  billingConfig,
 }: {
   readings: LocalReading[];
+  billingConfig: BillingConfig | null;
 }) {
   if (readings.length === 0) {
     return (
@@ -48,6 +52,15 @@ export default function ReadingHistoryList({
             <p className="mt-1 text-xs text-zinc-500">
               บันทึกโดย {resolveRecorderName(reading.recordedBy)}
             </p>
+            {billingConfig && reading.confirmedValue !== undefined && (
+              <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-800">
+                <BillingBreakdownPanel
+                  confirmedValue={reading.confirmedValue}
+                  previousReading={reading.previousReading ?? null}
+                  config={billingConfig}
+                />
+              </div>
+            )}
           </li>
         );
       })}

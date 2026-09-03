@@ -1,10 +1,11 @@
 # Export Format — RMU Meter Collection
 
-> สถานะ: **✅ Phase 6 MVP implement แล้ว (2026-09-03)** — Excel Export ใช้งานได้จริงกับ PostgreSQL, แต่สูตรค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้น **ยังคง placeholder ("-") ตามเดิม** เพราะยังไม่มีสูตรจริง (ดู [requirement.md](requirement.md) §5 ข้อ 1–2 และ §7 ด้านล่าง)
+> สถานะ: **✅ Phase 6B implement แล้ว (2026-09-03)** — ค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นคำนวณจริงแล้วผ่าน Billing Configuration ที่ปรับได้ (ดู §8) แต่อัตราเริ่มต้นเป็น **"สูตรเบื้องต้นจากเอกสารตัวอย่าง" เท่านั้น ไม่ใช่สูตรทางการที่ได้รับการรับรอง** (ดู [requirement.md](requirement.md) §5 ข้อ 1–2, §7, §8)
 > เอกสารนี้ระบุเฉพาะส่วนที่คำนวณได้แน่นอนแล้ว — **ห้ามเดาสูตรค่าไฟ** ตามคำสั่งเดิมของผู้ใช้
 > อ้างอิง [workflow.md](workflow.md) §4 และ [data-model.md](data-model.md)
 > **ปรับปรุง Phase 1 (2026-09-02)**: `usage` เปลี่ยนจาก "คำนวณตอน export เท่านั้น" เป็น **persist เป็น field บน `Reading` แล้ว** (snapshot ณ เวลา confirm) — ดู §2
-> **ปรับปรุง Phase 6 (2026-09-03)**: ดู §7 สำหรับสิ่งที่ implement จริง (path ไฟล์, library, decision ต่างๆ)
+> **ปรับปรุง Phase 6 (2026-09-03)**: ดู §7 สำหรับสิ่งที่ implement จริง (path ไฟล์, library, decision ต่างๆ) — เป็น MVP ที่ยังไม่มีสูตรค่าไฟจริง (placeholder ทั้งหมด)
+> **ปรับปรุง Phase 6B (2026-09-03)**: ดู §8 — เพิ่มสูตรค่าไฟแบบ configurable (Billing Configuration ใน IndexedDB) แทน placeholder เดิม, เพิ่มปุ่มอธิบาย/หน้าตั้งค่า
 
 ---
 
@@ -115,3 +116,52 @@ src/components/ExportExcelButton.tsx  # UI: เลือกเดือน + ป
 
 ### ยังไม่ implement (คงตามเดิมจาก §4)
 สูตรค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นจริง ยังคงบล็อกตาม §4 ทุกข้อ — เอกสารนี้จะไม่ถือว่า "พร้อม" (§6) จนกว่าจะได้ข้อมูลจริงจากผู้ใช้
+
+---
+
+## 8. Phase 6B — Billing Calculation + Settings + Explanation (2026-09-03)
+
+Phase 6 ทิ้ง `calculateBilling()` ไว้เป็น stub คืน null ทั้งหมด (§7) เพราะยังไม่มีสูตรจริง — Phase 6B เพิ่มสูตรคำนวณจริงเข้ามาแล้ว แต่ **ยังไม่ใช่สูตรทางการ**: เป็น **"สูตรเบื้องต้นที่แกะจากเอกสารตัวอย่าง"** ที่ผู้ใช้ระบุไว้ในคำสั่ง Phase 6B kickoff (FT 0.0972 บาท/หน่วย, ภาษี 7%, ค่าฐาน 8.19 บาท, ช่วงอัตรา 5 ช่วง) — อัตราค่าไฟพื้นฐานยังอยู่ระหว่างรอการยืนยันจากเจ้าหน้าที่ RMU ไม่ควรนำไปใช้ออกบิลจริง
+
+### สถาปัตยกรรม: Billing Configuration แยกจาก Calculation Service
+
+```
+src/lib/billing/
+├── types.ts                  # BillingTier, BillingConfig interfaces (ไม่มีตัวเลขจริงในไฟล์นี้)
+├── defaultConfig.ts           # DEFAULT_BILLING_CONFIG — ตัวเลขจากเอกสารตัวอย่างอยู่ที่นี่ที่เดียว
+├── tierValidation.ts          # validateTiers() — min/max, rate>=0, ห้ามทับซ้อน, unlimited เฉพาะช่วงสุดท้าย
+├── explanation.ts             # buildBillingExplanation(config) — ข้อความอธิบายสร้างจาก config เสมอ
+└── breakdown.ts                # buildBillingBreakdown(...) — breakdown ต่อ Reading ("ดูวิธีคำนวณ")
+
+src/lib/offline/billingConfigRepository.ts  # getBillingConfig/saveBillingConfig/resetBillingConfig (Dexie, IndexedDB)
+
+src/lib/export/calculation.ts  # Calculation Service เดิม — เพิ่ม calculateBaseCharge/calculateFT/calculateTax/
+                                #   calculateTotal/computeTierBreakdown, calculateBilling() รับ config เป็น parameter
+                                #   ไม่มีตัวเลขอัตราใดๆ hard-code อยู่ในไฟล์นี้เลย (ตามคำสั่ง Phase 6B kickoff ข้อ 3)
+```
+
+- **`calculateBilling(confirmedValue, previousReading, config)`**: คืน `{ usage, baseCharge, ft, tax, total }` เต็มความละเอียด (ไม่ปัดเศษ) — ปัดเป็น 2 ตำแหน่งเฉพาะตอนแสดงผล (UI: `toFixed(2)`, Excel: `numFmt "#,##0.00"`)
+- **ไม่มี previousReading → billing ทั้งชุดเป็น null** (ไม่ใช่แค่ usage) เพราะไม่รู้จำนวนหน่วยจริง การคำนวณค่าคงที่บางส่วนแล้วแสดงเป็นบิลบางส่วนจะทำให้เข้าใจผิดได้
+- **ค่าไฟพื้นฐาน = ค่าฐานคงที่ (baseCharge) + ผลรวมตามช่วงอัตรา** — คำนวณแบบ progressive/graduated bracket มาตรฐาน (เหมือนขั้นบันไดภาษีเงินได้): แต่ละช่วงคิดเฉพาะส่วนของ usage ที่ตกอยู่ในช่วงนั้น ไม่ใช่สูตรที่ปรับแต่งให้ตรงกับตัวเลขตัวอย่างในเอกสารเป๊ะ (ตามคำสั่ง "อย่าฝืนแก้สูตรเพื่อให้ Test ผ่าน")
+
+### Billing Configuration (IndexedDB, ไม่แตะ Prisma)
+
+- เก็บใน Dexie table ใหม่ `billingConfig` (single-row, key `"singleton"`) — เพิ่ม `db.version(2)` ใน `src/lib/offline/db.ts` โดยคง `version(1)` เดิมไว้ (Dexie upgrade แบบไม่กระทบข้อมูลเดิม)
+- `getBillingConfig()` auto-seed `DEFAULT_BILLING_CONFIG` ถ้ายังไม่มี record, `saveBillingConfig()`/`resetBillingConfig()` ตามที่กำหนด
+- **ไม่มี Prisma model ใหม่ ไม่มี migration ใหม่** ตรงตามข้อห้าม
+
+### UI ใหม่
+
+- `BillingSettingsPanel.tsx` — ฟอร์ม FT/ภาษี/ค่าฐาน + ตาราง tier แก้ไขได้ (เพิ่ม/ลบ, validate ผ่าน `validateTiers()`), ปุ่ม "บันทึกการตั้งค่า"/"คืนค่าเริ่มต้น" — tier สุดท้ายบังคับเป็น "ไม่จำกัด" เสมอ (ไม่ให้ผู้ใช้ตั้งค่าผิดได้ตั้งแต่ UI)
+- `BillingExplanation.tsx` — ปุ่ม "อธิบายการคิดค่าไฟ" เปิด panel ข้อความที่ generate จาก config ปัจจุบันทั้งหมด (ไม่มีตัวเลข hard-code ในข้อความ) พร้อม disclaimer "สูตรเบื้องต้นจากเอกสารตัวอย่าง..."
+- `BillingBreakdownPanel.tsx` — ปุ่ม "ดูวิธีคำนวณ" ต่อ Reading แต่ละรายการ แสดง breakdown ตาม tier จริง — ใช้ทั้งใน saved-reading card และใน `ReadingHistoryList`
+
+### Excel ใช้ Calculation Service เดียวกัน (ไม่มีสูตรที่สอง)
+
+- Client (`ExportExcelButton`) ส่ง `config` (billing config ปัจจุบัน, JSON) เป็น query param เพิ่มจาก Phase 6 เดิม (`?month=...&config=...`) — ไม่เปลี่ยน method/response format ของ route เดิม
+- Server (`route.ts`) parse ผ่าน `parseBillingConfigParam()`, fallback เป็น `DEFAULT_BILLING_CONFIG` ถ้าไม่มี/parse ไม่ได้ — เรียก `mapReadingToRow(reading, seq, config)` → `calculateBilling()` ตัวเดียวกับที่ UI ใช้ ไม่มีสูตรซ้ำใน route
+- ข้อความ placeholder แถวที่ 4 ของ Excel เปลี่ยนจาก "ยังไม่มีสูตรคำนวณค่าไฟจริง" เป็น "สูตรเบื้องต้นจากเอกสารตัวอย่าง ยังไม่ใช่สูตรทางการ..." ให้ตรงกับสถานะจริง
+
+### ทดสอบจริงด้วย Playwright ต่อ PostgreSQL จริง
+
+สร้าง 2 readings (ME-001 เดือนก่อน=200, เดือนนี้=260, usage=60) → เห็นค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นบนหน้าเว็บทันทีหลังบันทึก → เปิด "ดูวิธีคำนวณ" และ "อธิบายการคิดค่าไฟ" → Sync → แก้ FT/ภาษี/อัตราช่วงแรกใน Settings → บันทึก (ค่าที่แสดงเปลี่ยนตาม) → คืนค่าเริ่มต้น (FT กลับเป็น 0.0972) → Export Excel → เปิดไฟล์จริงตรวจแถวข้อมูล: `baseCharge=107.75, ft=5.832, tax=7.9507, total=121.53274` ตรงกับที่คำนวณบนหน้าเว็บ (usage=60, DEFAULT_BILLING_CONFIG) เป๊ะ — ยืนยันว่า Excel กับหน้าเว็บใช้ Calculation Service เดียวกันจริง ไม่มี error ใน console/page เลย
