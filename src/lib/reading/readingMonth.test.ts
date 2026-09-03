@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateUsage,
+  formatMonthThai,
   isFutureMonth,
   previousReadingMonth,
   toMonthValue,
@@ -41,5 +42,11 @@ describe("calculateUsage", () => {
 
   it("does not guess a value when there is no previous reading", () => {
     expect(calculateUsage(135, undefined)).toBeUndefined();
+  });
+});
+
+describe("formatMonthThai", () => {
+  it("formats as a Thai month name + Buddhist year", () => {
+    expect(formatMonthThai("2026-09")).toBe("กันยายน 2569");
   });
 });

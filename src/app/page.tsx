@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import CameraCapture from "@/components/CameraCapture";
+import ExportExcelButton from "@/components/ExportExcelButton";
 import OnlineStatusBadge from "@/components/OnlineStatusBadge";
 import ReadingHistoryList from "@/components/ReadingHistoryList";
 import { compressImage } from "@/lib/image/compressImage";
@@ -13,6 +14,7 @@ import { getPendingQueueItems } from "@/lib/offline/syncQueueRepository";
 import { recognizeMeterValue } from "@/lib/ocr/ocrProvider";
 import {
   currentMonthValue,
+  formatMonthThai,
   isFutureMonth,
   toReadingMonth,
 } from "@/lib/reading/readingMonth";
@@ -22,16 +24,6 @@ import {
   saveOfflineReading,
 } from "@/lib/reading/readingWorkflow";
 import { syncPendingReadings } from "@/lib/sync/syncService";
-
-function formatMonthThai(monthValue: string): string {
-  const [year, month] = monthValue.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, 1));
-  return new Intl.DateTimeFormat("th-TH-u-ca-buddhist", {
-    year: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  }).format(date);
-}
 
 type OcrStatus = "idle" | "loading" | "done" | "error";
 
@@ -537,6 +529,8 @@ export default function Home() {
         <h2 className="text-sm font-semibold">ประวัติที่บันทึกในเครื่อง</h2>
         <ReadingHistoryList readings={history} />
       </section>
+
+      <ExportExcelButton />
     </div>
   );
 }

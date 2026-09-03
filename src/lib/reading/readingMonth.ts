@@ -42,3 +42,16 @@ export function calculateUsage(
   if (previous === undefined) return undefined;
   return current - previous;
 }
+
+// "YYYY-MM" -> "กันยายน 2569" (Thai month name, Buddhist year). Presentation
+// helper only — no business logic — shared by the reading workflow UI and
+// the Excel export title block.
+export function formatMonthThai(monthValue: string): string {
+  const [year, month] = monthValue.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  return new Intl.DateTimeFormat("th-TH-u-ca-buddhist", {
+    year: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(date);
+}

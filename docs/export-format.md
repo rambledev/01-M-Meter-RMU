@@ -1,9 +1,10 @@
 # Export Format — RMU Meter Collection
 
-> สถานะ: **⏸️ ยังไม่ final — รอสูตรคำนวณค่าไฟและไฟล์ตัวอย่างรายงานจริงจากผู้ใช้** (ดู [requirement.md](requirement.md) §5 ข้อ 1–2)
+> สถานะ: **✅ Phase 6 MVP implement แล้ว (2026-09-03)** — Excel Export ใช้งานได้จริงกับ PostgreSQL, แต่สูตรค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้น **ยังคง placeholder ("-") ตามเดิม** เพราะยังไม่มีสูตรจริง (ดู [requirement.md](requirement.md) §5 ข้อ 1–2 และ §7 ด้านล่าง)
 > เอกสารนี้ระบุเฉพาะส่วนที่คำนวณได้แน่นอนแล้ว — **ห้ามเดาสูตรค่าไฟ** ตามคำสั่งเดิมของผู้ใช้
 > อ้างอิง [workflow.md](workflow.md) §4 และ [data-model.md](data-model.md)
 > **ปรับปรุง Phase 1 (2026-09-02)**: `usage` เปลี่ยนจาก "คำนวณตอน export เท่านั้น" เป็น **persist เป็น field บน `Reading` แล้ว** (snapshot ณ เวลา confirm) — ดู §2
+> **ปรับปรุง Phase 6 (2026-09-03)**: ดู §7 สำหรับสิ่งที่ implement จริง (path ไฟล์, library, decision ต่างๆ)
 
 ---
 
@@ -84,3 +85,33 @@ src/lib/export/
 - [ ] ไฟล์ตัวอย่างรายงาน Excel จริงอย่างน้อย 1 ไฟล์
 
 จนกว่าจะครบ Phase 6 จะไม่เริ่ม implement ส่วนคำนวณค่าไฟตามคำสั่งเดิมของผู้ใช้ (requirement.md §3.5)
+
+---
+
+## 7. Phase 6 MVP — สิ่งที่ implement จริง (2026-09-03)
+
+สูตรค่าไฟยังไม่ครบตาม §6 (ยังไม่ได้สูตรจริง/ไฟล์ตัวอย่างรายงาน) แต่ผู้ใช้อนุมัติให้ทำ **Excel Export MVP สำหรับ demo** โดยให้ค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นเป็น placeholder แทนที่จะรอสูตรจริง งานนี้ไม่ถือว่าเอกสารข้อ §6 ครบแล้ว — เมื่อได้สูตรจริงต้องกลับมาแก้ `calculateBilling()` เท่านั้น (ไม่แตะ Excel layout code)
+
+### ไฟล์ที่สร้างจริง
+```
+src/lib/export/
+├── calculation.ts       # Calculation Service — calculateUsage() (wrapper รอบ src/lib/reading/readingMonth.ts)
+│                        #   และ calculateBilling() ที่ return null ทั้งหมด (placeholder, ไม่มีสูตรจริง)
+├── mapReadingToRow.ts   # แปลง Reading (join Meter→Room) เป็น ExportRow โดยเรียก Calculation Service
+├── excel.ts             # ExcelJS layout เท่านั้น — merge cell, group header, border, number format
+├── filename.ts          # buildExportFilename() → "บัญชีเรียกเก็บเงินค่าไฟฟ้า-YYYY-MM.xlsx"
+└── monthParam.ts         # parse "YYYY-MM" จาก query string → Date (validate เดือน 01-12)
+
+src/app/api/export/route.ts       # GET ?month=YYYY-MM — query PostgreSQL, join Reading→Meter→Room→Zone
+src/components/ExportExcelButton.tsx  # UI: เลือกเดือน + ปุ่ม Export Excel (อยู่ต่อจาก History บนหน้าแรก)
+```
+
+### Decision ที่เพิ่มจาก MVP นี้
+- **Library**: เลือก `exceljs` (ไม่ใช่ `xlsx`/SheetJS) เพราะรองรับ merge cell + font/border/fill ครบ ตรงกับ requirement ของ group header 2 ชั้น — ดู decision-log.md สำหรับ vulnerability ที่รับทราบและยอมรับ (uuid transitive dependency)
+- **`calculateBilling()` เป็น stub ถาวรใน Phase 6** — return `{ baseCharge: null, ftCharge: null, tax: null, total: null }` เสมอ, Excel layer render null เป็น `"-"` — ไม่มีการเดาสูตรใดๆ ตามคำสั่งเดิม
+- **ตำแหน่งคอลัมน์ "หน่วยที่ใช้"**: mockup header เดิมไม่ได้ระบุกลุ่มของคอลัมน์นี้ชัดเจน (มีแค่กลุ่ม "อ่านมิเตอร์" และ "ค่าไฟ") จึงวางเป็นคอลัมน์เดี่ยว (ไม่ merge กลุ่ม) คั่นกลางระหว่างสองกลุ่มนั้น
+- **ไม่พบข้อมูล**: API ตอบ `404 {ok:false, error:"NO_DATA", message:"ไม่พบข้อมูลการอ่านมิเตอร์สำหรับเดือนนี้"}` แทนการสร้างไฟล์ Excel ว่างหรือ Reading ปลอม — ตรวจสอบแล้วด้วย browser test จริง
+- **orderBy**: ใช้ `{ meterId: "asc" }` แบบง่าย แทนการ sort ผ่าน relation หลายชั้น (เช่น zone/room name) เพื่อลดความเสี่ยงจาก Prisma nested-relation ordering limitation — เป็นการลดความซับซ้อนสำหรับ MVP
+
+### ยังไม่ implement (คงตามเดิมจาก §4)
+สูตรค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นจริง ยังคงบล็อกตาม §4 ทุกข้อ — เอกสารนี้จะไม่ถือว่า "พร้อม" (§6) จนกว่าจะได้ข้อมูลจริงจากผู้ใช้

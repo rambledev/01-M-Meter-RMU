@@ -268,7 +268,35 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 - **Duplicate**: browser context ที่ 2 (IndexedDB คนละตัว จำลอง "อีกเครื่อง") สร้าง reading ซ้ำ meter+month เดิมกับที่ sync ไปแล้ว → server ตอบ 409 DUPLICATE → **ไม่มี row ที่ 3 ถูกสร้างใน PostgreSQL** (ตรวจนับแล้ว: 2 readings ไม่ใช่ 3) → client set เป็น SYNCED เอง
 - **previousReading/usage**: สร้าง reading เดือน ก.ค. (ME-003, ไม่มี previous) แล้วเดือน ส.ค. (มี previous) → sync ทั้งคู่ → ตรวจ PostgreSQL ยืนยัน `previousReading=200, confirmedValue=260, usage=60` ถูกต้องครบ
 
-⚠️ **ข้อมูลทดสอบยังคงอยู่ใน PostgreSQL จริงหลัง test** (4 Reading rows: ME-001/ME-002/ME-003×2 + ไฟล์ภาพ 4 ไฟล์ใน `public/upload/meter/`) — ตั้งใจไม่ลบทิ้งเพื่อให้ตรวจสอบได้ตามที่ Phase 5 spec ข้อ 15 ต้องการ ("หลัง browser test ให้ตรวจ PostgreSQL โดยตรง") รอผู้ใช้ยืนยันว่าจะให้ลบก่อนเริ่ม Phase 6 หรือไม่
+⚠️ **ข้อมูลทดสอบยังคงอยู่ใน PostgreSQL จริงหลัง test** (4 Reading rows: ME-001/ME-002/ME-003×2 + ไฟล์ภาพ 4 ไฟล์ใน `public/upload/meter/`) — ตั้งใจไม่ลบทิ้งเพื่อให้ตรวจสอบได้ตามที่ Phase 5 spec ข้อ 15 ต้องการ ("หลัง browser test ให้ตรวจ PostgreSQL โดยตรง") รอผู้ใช้ยืนยันว่าจะให้ลบก่อนเริ่ม Phase 6 หรือไม่ — **หมายเหตุ: ผู้ใช้ยืนยันแล้วให้ลบก่อน Phase 6 เริ่ม ข้อมูลทดสอบ Phase 5 ถูกลบออกหมดแล้ว (Reading/ReadingImage 0 rows) ก่อนเริ่ม Phase 6**
+
+---
+
+## ✅ Phase 6 — Excel Export MVP: Implementation Decisions (2026-09-03)
+
+**บริบท**: docs/export-format.md §6 ยังไม่ครบ (ยังไม่มีสูตรค่าไฟจริง/ไฟล์ตัวอย่างรายงานจริง) แต่ผู้ใช้อนุมัติให้ทำ Excel Export **แบบ MVP สำหรับ demo** โดยชัดเจนว่า **ห้ามคิดสูตรค่าไฟเอง** — ค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นจึงเป็น placeholder ("-") ทั้งหมด ไม่ใช่การ implement บัญชีจริง (ดูรายละเอียดที่ export-format.md §7)
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| เลือก library `exceljs@4.4.0` (ไม่ใช่ `xlsx`/SheetJS) | รองรับ merge cell หลายชั้น + font/border/fill/numFmt ครบ ตรงกับ requirement group header 2 ชั้น ("อ่านมิเตอร์"/"ค่าไฟ") ซึ่ง SheetJS community edition ไม่รองรับ styling ระดับนี้ |
+| **รับทราบ npm audit "2 moderate" บน `uuid <11.1.1`** (transitive dependency ของ exceljs, GHSA-w5hq-g745-h8pq) โดยไม่ downgrade | `npm audit fix --force` จะ downgrade exceljs เหลือ 3.4.0 (major เก่ากว่า, ฟีเจอร์น้อยกว่า) ช่องโหว่นี้ต้องการ attacker-controlled buffer เข้า uuid v3/v5/v6 ซึ่งโค้ดเราไม่เปิดช่องให้ inject ได้ (ไม่ได้เรียก uuid โดยตรงหรือรับ buffer จาก user ไปป้อน) — ความเสี่ยงจริงต่ำ เลือกคงเวอร์ชันปัจจุบันไว้ |
+| Path `src/lib/export/calculation.ts` (ไม่ใช้ `src/lib/calculation/` ตามตัวอย่างใน kickoff message) | kickoff ใช้คำว่า "เช่น" (ตัวอย่าง ไม่ใช่บังคับ) และ path นี้ตรงกับที่ export-format.md §3/§5 ระบุไว้ล่วงหน้าแล้ว เลือกตาม doc เดิมเพื่อความสอดคล้อง |
+| `calculateUsage()` ใน Calculation Service เป็น thin wrapper รอบ `src/lib/reading/readingMonth.ts` (ไม่เขียนสูตรซ้ำ) | สูตร `usage = confirmedValue - previousReading` ถูก lock และ implement แล้วตั้งแต่ Phase 1/3 ฝั่ง client — ป้องกันมีสูตรเดียวกัน 2 ที่ (client workflow กับ export) ที่อาจ drift ไม่ตรงกันในอนาคต |
+| `calculateBilling()` return `{baseCharge:null, ftCharge:null, tax:null, total:null}` เสมอ, Excel layer render null เป็น `"-"` | ตรงตามคำสั่ง "ห้ามคิดสูตรค่าไฟเอง" แบบตรงตัวที่สุด — ไม่มี logic คำนวณใดๆ แม้แต่ demo formula ที่ดูสมเหตุสมผล เพื่อไม่ให้ใครเข้าใจผิดว่าเป็นตัวเลขจริง |
+| คอลัมน์ "หน่วยที่ใช้" วางเป็นคอลัมน์เดี่ยว (ไม่ merge กลุ่ม) คั่นระหว่างกลุ่ม "อ่านมิเตอร์" กับ "ค่าไฟ" | column list ของ kickoff มีคอลัมน์นี้ชัดเจน แต่ header mockup ไม่ได้ระบุกลุ่มของมัน — ตีความตามช่องว่างที่เหลือให้สมเหตุสมผลที่สุด |
+| ไม่มี Reading ในเดือนที่เลือก → API ตอบ `404 JSON {error:"NO_DATA", message:"ไม่พบข้อมูลการอ่านมิเตอร์สำหรับเดือนนี้"}` แทนการสร้างไฟล์ Excel เปล่า/Reading ปลอม | ตรงตามคำสั่งชัดเจน "ไม่ต้องสร้าง Reading ปลอมตอน Export" — client (`ExportExcelButton`) แยก JSON error ออกจาก binary xlsx ด้วย `Content-Type` header |
+| `orderBy: { meterId: "asc" }` แบบง่าย แทนการ sort ผ่าน relation หลายชั้น (zone/room name) | ลดความเสี่ยงจาก Prisma nested-relation ordering ที่อาจซับซ้อนเกินความจำเป็นของ MVP — เป็นการลดความซับซ้อนที่ยอมรับได้ |
+| Content-Disposition header ใช้ `filename="report.xlsx"; filename*=UTF-8''<encoded>` (dual filename) | ชื่อไฟล์เป็นภาษาไทย ต้อง encode UTF-8 ตาม RFC 6266 เพื่อให้ทุก browser ดาวน์โหลดชื่อไฟล์ถูกต้อง (ASCII fallback + UTF-8 extended param) |
+
+**ทดสอบจริงด้วย Playwright ต่อ PostgreSQL จริง** (`202.29.22.92:8024/rmu_meter`, DB ว่างเปล่าก่อนเริ่ม — 0 Reading):
+- สร้าง Reading จริงผ่าน workflow เต็ม (ME-001, เดือนปัจจุบัน 2026-09, current=260, ไม่มี previous) → บันทึก offline → Sync → PostgreSQL มี `Reading` จริง (`status: SYNCED`)
+- เปิดหน้าใหม่ (browser context ใหม่) → ปุ่ม Export Excel เลือกเดือนปัจจุบันอัตโนมัติ (ค่า default ของ `<input type="month">` ตรงกับเดือนวันนี้) → กด Export → ได้ download event จริงชื่อไฟล์ `บัญชีเรียกเก็บเงินค่าไฟฟ้า-2026-09.xlsx` ตรงตาม spec เป๊ะ
+- เปิดไฟล์ .xlsx ที่ดาวน์โหลดจริงด้วย exceljs (อ่านกลับ ไม่ใช่ mock): ยืนยัน title merge แถว 1, เดือน+วันที่ออกรายงานแถว 2-3, ข้อความ placeholder แถว 4, group header "อ่านมิเตอร์"/"ค่าไฟ" ถูกต้องแถว 6-7, sub-header ครั้งหลัง/ครั้งก่อน/ค่าไฟพื้นฐาน/ค่า FT/ภาษี/รวมทั้งสิ้นถูกต้อง, แถวข้อมูล (แถว 8) มี roomName="ห้อง 101", currentValue=260, previousValue="-" (ไม่มี previous จริง), usage="-", billing ทุกคอลัมน์ = "-"
+- ทดสอบ path ไม่มีข้อมูล: `curl /api/export?month=2020-01` → ได้ `404 {"ok":false,"error":"NO_DATA","message":"ไม่พบข้อมูลการอ่านมิเตอร์สำหรับเดือนนี้"}` ตรงตาม spec
+- Console/page errors: ไม่มี (`[]` ทั้งสอง context)
+- หลังทดสอบ: ลบ Reading/ReadingImage ทดสอบ (1 แถว) และไฟล์ภาพ `public/upload/meter/ME-001m09_2026.jpg` ออกจาก PostgreSQL/disk ตามที่ผู้ใช้ยืนยัน — DB กลับสู่ 0 Reading
+
+**สถานะ**: ✅ ไม่มี billing formula จริงถูกสร้างขึ้น, ไม่มี accounting system/PDF/Dashboard/Admin/Resident/Advanced report/Scheduled export/Email/Cloud storage — ตรงตามข้อห้ามทั้งหมดของ Phase 6
 
 ---
 
@@ -290,4 +318,6 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 
 **Phase 4 (Camera + OCR) เสร็จแล้ว**: Tesseract.js locked + implement จริง, Camera capture พร้อม permission/error handling + file fallback, OCR แยกจาก confirmedValue อย่างเคร่งครัด, เก็บเฉพาะ Original Image (ไม่มี crop ถูก persist) — ยืนยันด้วย Playwright จริงรวมถึง OCR อ่านค่าได้ถูกต้องจากภาพทดสอบ — ทดสอบ 35 tests ผ่าน, typecheck/lint/build ผ่าน ยังไม่มี Auto Sync/API upload (Phase 5 เป็นต้นไป)
 
-**Phase 5 (MVP Sync) เสร็จแล้ว**: seed reference data เข้า PostgreSQL จริง (อนุมัติแล้ว), API `/api/readings/sync` + client `syncService.ts` ทำงานครบ Online/Offline→Online/Duplicate — ยืนยันด้วย Playwright จริงต่อ PostgreSQL จริง (ไม่ใช่ mock): Reading+ReadingImage ถูกสร้างจริง, duplicate ไม่ซ้ำจริง, previousReading/usage ถูกต้องจริง — ทดสอบ 40 tests ผ่าน, typecheck/lint/build ผ่าน ยังไม่มี Auto/Background Sync, Excel, Billing, Dashboard (Phase 6 เป็นต้นไป) — **มีข้อมูลทดสอบค้างอยู่ใน PostgreSQL จริง** ดูหัวข้อ Phase 5 ด้านบนสำหรับรายละเอียดและขอคำยืนยันเรื่องการลบ
+**Phase 5 (MVP Sync) เสร็จแล้ว**: seed reference data เข้า PostgreSQL จริง (อนุมัติแล้ว), API `/api/readings/sync` + client `syncService.ts` ทำงานครบ Online/Offline→Online/Duplicate — ยืนยันด้วย Playwright จริงต่อ PostgreSQL จริง (ไม่ใช่ mock): Reading+ReadingImage ถูกสร้างจริง, duplicate ไม่ซ้ำจริง, previousReading/usage ถูกต้องจริง — ทดสอบ 40 tests ผ่าน, typecheck/lint/build ผ่าน ยังไม่มี Auto/Background Sync, Excel, Billing, Dashboard (Phase 6 เป็นต้นไป) — ข้อมูลทดสอบถูกลบออกหมดแล้วก่อนเริ่ม Phase 6
+
+**Phase 6 (Excel Export MVP) เสร็จแล้ว**: `/api/export?month=YYYY-MM` query PostgreSQL จริง (Reading→Meter→Room→Zone) สร้างไฟล์ `.xlsx` ด้วย exceljs ตรงตาม format ที่กำหนด (title, group header 2 ชั้น, border/numFmt/freeze/autoFilter), Calculation Service (`src/lib/export/calculation.ts`) แยกจาก Excel layout ชัดเจน, `calculateUsage()` ใช้สูตร lock เดิม, `calculateBilling()` เป็น placeholder null ทั้งหมด (ไม่มีสูตรค่าไฟจริง ตามคำสั่ง) — ยืนยันด้วย Playwright จริงต่อ PostgreSQL จริง: สร้าง Reading → Sync → Export → เปิดไฟล์จริงตรวจค่าถูกต้องครบ, ทดสอบ path ไม่มีข้อมูลได้ข้อความที่ถูกต้อง — ทดสอบ 56 tests ผ่าน, typecheck/lint/build ผ่าน ไม่มี billing formula จริง/accounting system/PDF/Dashboard/Admin/Resident/Advanced report/Scheduled export/Email/Cloud storage — ข้อมูลทดสอบถูกลบออกหมดแล้วหลัง browser test (ผู้ใช้ยืนยัน)
