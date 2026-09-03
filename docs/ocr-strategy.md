@@ -1,9 +1,9 @@
 # OCR Strategy — RMU Meter Collection
 
-> สถานะ: **⏸️ ยังไม่ล็อก provider — รอการยืนยันจากผู้ใช้** (ดู [requirement.md](requirement.md) §5 ข้อ 4)
-> เอกสารนี้เป็นการวิเคราะห์ตัวเลือกเพื่อประกอบการตัดสินใจ ไม่ใช่การเดาหรือ implement ล่วงหน้า
+> สถานะ: **✅ Locked & Implemented (Phase 4, 2026-09-03)** — Tesseract.js (client-side, on-device) ยืนยันแล้วตอนเริ่ม Phase 4 และ implement จริงที่ `src/lib/ocr/`
 > อ้างอิง business rules จาก [requirement.md](requirement.md) §3.3 และ [workflow.md](workflow.md) ขั้นตอน 5–6
 > **ปรับปรุง 2026-09-02**: OCR Region/Crop เป็นข้อมูลชั่วคราวใน memory/client เท่านั้น **ไม่ persist ลง server หรือ IndexedDB อีกต่อไป** ไม่ว่าจะเลือก provider ใด (ดู [decision-log.md](decision-log.md))
+> **ปรับปรุง Phase 4 (2026-09-03)**: ดู §5 สำหรับรายละเอียด implementation จริง (offline caveat, fixed region, native `rectangle` crop)
 
 ---
 
@@ -57,7 +57,7 @@
 - ไม่มี cost ต่อ request ซึ่งเหมาะกับช่วง MVP ที่ยังไม่ทราบ scale จริง (requirement.md §5 ข้อ 6)
 - ความแม่นยำที่อาจต่ำกว่า cloud API ไม่ใช่ปัญหาใหญ่ เพราะ requirement.md §3.3 บังคับให้ผู้จดต้องตรวจ/แก้ไขค่าก่อน confirm อยู่แล้ว (OCR เป็นแค่ตัวช่วยกรอก ไม่ใช่ค่าสุดท้าย)
 
-**สถานะ**: ⏸️ นี่คือข้อเสนอ ไม่ใช่การล็อก — ยังไม่ต้อง block Phase 0 เพราะ OCR provider ยังไม่ต้อง lock ตอนนี้ แต่ต้องได้รับการยืนยันจากผู้ใช้ก่อนเริ่ม **Phase 4 (Camera + OCR)** (ดู tech-stack.md §5 Development Phases)
+**สถานะ**: ✅ Locked — ผู้ใช้ยืนยัน Tesseract.js (client-side) ตอนเริ่ม Phase 4 kickoff (2026-09-03) ตรงตามข้อเสนอนี้เป๊ะ ดู §5 สำหรับรายละเอียด implementation จริง
 
 ---
 
@@ -93,3 +93,30 @@ Confirmed Value (Reading.confirmedValue — ค่าที่ใช้จริ
 - `src/lib/ocr/` เป็น wrapper กลางที่ครอบ engine ที่เลือก เพื่อให้ swap provider ได้ในอนาคตโดยไม่กระทบ UI layer หรือ data model (workflow.md ขั้นตอน 5)
 - `Reading.ocrValue` เป็น `String?` (nullable) — รองรับทั้งกรณี on-device (มีค่าเสมอทันที แม้ offline) และ cloud API (อาจว่างชั่วคราวถ้าเลือกตัวเลือก B/C และ offline ตอนถ่ายภาพ)
 - **มีแนวโน้มใช้ Tesseract.js แบบ on-device** (ตามข้อเสนอ §3) แต่**ยังไม่ต้องบังคับติดตั้งใน Phase 0** — การล็อก provider จริงจะเกิดก่อนเริ่ม Phase 4 เท่านั้น
+
+---
+
+## 5. Implementation จริง (Phase 4, 2026-09-03)
+
+`tesseract.js@7.0.0` — `src/lib/ocr/{ocrRegion,ocrProvider}.ts`
+
+### 5.1 Native crop แทน manual canvas crop
+แทนที่จะ manual crop ภาพผ่าน `<canvas>` แล้วส่ง canvas/blob ที่ครอปแล้วเข้า Tesseract (ตามที่ §4 ร่างไว้เดิม) — implementation จริงส่ง **Original Image เต็มภาพ** เข้า `worker.recognize(imageBlob, { rectangle })` โดย Tesseract.js รองรับ parameter `rectangle` (`{ left, top, width, height }` หน่วยพิกเซล) ให้ crop เองภายใน WASM memory ไม่ต้องสร้าง canvas/Blob ที่ครอปไว้ในโค้ดของเราเองเลย — **เข้มงวดกว่าที่ §4 ระบุไว้อีก**: ไม่มี object รูปภาพที่ครอปแล้วปรากฏใน memory ของแอปเราแม้แต่ชั่วคราว
+
+`regionToRectangle()` แปลง fixed region (`DEFAULT_OCR_REGION`, สัดส่วน 0-1 ของภาพ) เป็นพิกเซลตามขนาดภาพจริง พร้อม clamp ให้อยู่ในขอบเขตภาพเสมอ (ค้นพบระหว่าง browser test ว่า rectangle ที่หลุดขอบภาพทำให้ Tesseract/Leptonica **abort ทั้ง WASM worker** แทนที่จะโยน JS error ที่ดักได้ — แก้แล้วด้วยการ clamp ก่อนส่งเข้า Tesseract เสมอ)
+
+### 5.2 Fixed OCR Region (ไม่มี UI ลากกรอบ)
+`DEFAULT_OCR_REGION = { x: 0.15, y: 0.375, width: 0.7, height: 0.25 }` — กรอบสี่เหลี่ยมคงที่ แสดงเป็น overlay สีเหลืองทับ preview กล้อง ตามที่ §4 อนุญาตให้ทำแบบง่ายสำหรับ demo ไม่ต้องมีระบบลากกรอบอิสระ
+
+### 5.3 Character whitelist
+`tessedit_char_whitelist: "0123456789."` — จำกัดผลลัพธ์ให้เป็นตัวเลข+จุดทศนิยมเท่านั้น เพิ่มความแม่นยำสำหรับเลขมิเตอร์โดยเฉพาะ โดยไม่ต้องมี model พิเศษ
+
+### 5.4 ⚠️ Offline caveat ที่บันทึกไว้ตามที่สั่ง (ยังไม่แก้ ไม่ block Phase 4)
+Tesseract.js ใช้ **CDN default** สำหรับโหลด worker script, WASM core, และ "eng" trained-data (รวมไม่กี่ MB) ตอน**ใช้ OCR ครั้งแรก** — หมายความว่า:
+- **ครั้งแรกที่ใช้ OCR ต้องมีอินเทอร์เน็ต** เพื่อดาวน์โหลด asset เหล่านี้
+- หลังจากนั้น browser จะ cache asset ผ่าน Cache Storage API (พฤติกรรมมาตรฐานของ tesseract.js) ทำให้**ใช้ offline ได้หลังจากนั้น** ตรงตาม requirement "OCR ต้องรองรับ Offline หลังจาก assets/model พร้อมใช้งาน"
+- **ยังไม่ได้ self-host asset เหล่านี้ในโปรเจกต์** (ซึ่งจะรับประกัน offline ได้ตั้งแต่ครั้งแรก) — ตัดสินใจเลื่อนเป็น future optimization ตามคำสั่งชัดเจนของผู้ใช้ที่ Phase 4 kickoff ("ถ้า...มีความซับซ้อนเกินกว่าจะทำให้ Demo เสร็จเร็ว ให้ทำ implementation ที่ใช้งาน Demo ได้ก่อน และบันทึกข้อจำกัดไว้ใน docs")
+- ถ้า OCR ล้มเหลว (เช่น ครั้งแรกตอน offline) UI จะแสดงข้อความ "อ่านค่าอัตโนมัติไม่สำเร็จ...กรุณากรอกค่าด้วยตนเอง" — ผู้ใช้ยังกรอกค่าและบันทึก Reading ได้ปกติเสมอ ไม่ block workflow
+
+### 5.5 Image compression (ไม่ใช่ crop)
+`src/lib/image/compressImage.ts` — resize ภาพต้นฉบับให้ด้านยาวสุดไม่เกิน 1600px + re-encode เป็น JPEG quality 0.8 ก่อนเก็บ เป็นการแปลงภาพเต็มให้เล็กลง **ไม่ใช่การ crop** (ตาม Phase 4 spec ข้อ 8) — ภาพที่เก็บยังคงเป็นภาพเต็มของมิเตอร์เสมอ

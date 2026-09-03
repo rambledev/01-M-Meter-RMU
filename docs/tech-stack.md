@@ -19,7 +19,8 @@
 | ORM | Prisma | **5.22.0** |
 | DB Client | @prisma/client | **5.22.0** |
 | Database | PostgreSQL | **17** |
-| Offline Storage | Dexie.js (IndexedDB wrapper) | latest stable ที่เข้ากับ React 19 |
+| Offline Storage | Dexie.js (IndexedDB wrapper) | **4.4.5** |
+| OCR | Tesseract.js (client-side, on-device) | **7.0.0** — ล็อกแล้ว Phase 4 (2026-09-03), ดู ocr-strategy.md §5 |
 | Package Manager | npm | — |
 | Containerization | Docker + Docker Compose | — |
 | Production Deployment | Coolify | ใช้ **Persistent Storage ของ Coolify** สำหรับ `public/upload/meter/` (ภาพต้นฉบับ) — ยังไม่ใช้ S3/MinIO ใน MVP นี้ (เพิ่ม 2026-09-02, ดู decision-log.md) |

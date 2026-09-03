@@ -205,6 +205,41 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 
 ---
 
+## ✅ Phase 3 — Meter Reading Workflow: Implementation Decisions (2026-09-03)
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| เพิ่ม `findReadingByMeterAndMonth(meterId, readingMonth)` บน repository เดิม (ไม่สร้าง storage layer ใหม่) | Previous Reading lookup (requirement.md §3.1) และ duplicate check (§3.2) ต้องการ query ตาม compound index `[meterId+readingMonth]` ที่ Phase 2 เตรียมไว้แล้วแต่ยังไม่มี accessor — เป็นการต่อยอด repository ที่มีอยู่ ไม่ใช่ layer ใหม่ |
+| Demo data (Zone/Room/Meter/User) เป็น static TS module (`src/lib/meters/demoData.ts`) ไม่ใช่ DB records | ยังไม่มี API/seed workflow ตามที่ระบุชัดเจนใน Phase 3 kickoff — เพียงพอสำหรับ demo, ไม่ต้องสร้างหน้า Admin |
+| Reading workflow แยกเป็น layer ต่างหาก (`src/lib/reading/readingWorkflow.ts`) คั่นระหว่าง UI กับ repository | ตรงตาม architecture diagram ที่ระบุไว้ใน Phase 3 kickoff (UI → Meter lookup/Reading workflow → Repository → Dexie → IndexedDB) |
+| `OnlineStatusBadge` ใช้ `useSyncExternalStore` แทน `useState`+`useEffect` | หลีกเลี่ยง ESLint rule `react-hooks/set-state-in-effect` (Next.js 16/React 19 tooling) — เป็นวิธีมาตรฐานสำหรับ subscribe ค่าจาก browser API โดยไม่มี setState ในตัว effect เอง |
+
+**บั๊กที่พบระหว่าง browser test (แก้ก่อน commit)**: หลังบันทึกสำเร็จ UI สลับไปแสดงการ์ด "มีการบันทึกมิเตอร์นี้แล้ว" ทันทีแทนที่จะแสดงข้อความ "บันทึกสำเร็จ" เพราะ code ตั้ง `duplicateReading` เป็น reading ที่เพิ่ง save เอง — แก้โดยแยก state `savedReading` ให้แสดงผลก่อน `duplicateReading` เสมอ
+
+**สถานะ**: ✅ ไม่มี architectural decision ใหม่ที่ขัดกับของเดิม, ไม่แก้ Prisma schema, ไม่สร้าง storage layer ใหม่
+
+---
+
+## ✅ Phase 4 — Camera + OCR: Implementation Decisions (2026-09-03)
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| **OCR provider ล็อกแล้ว: Tesseract.js (client-side)** | ผู้ใช้ยืนยันชัดเจนตอนเริ่ม Phase 4 kickoff — แก้ ⏸️ pending status ใน ocr-strategy.md ให้เป็น ✅ Locked ตรงกับข้อเสนอเดิมที่แนะนำไว้ตั้งแต่ก่อน Phase 0 |
+| ใช้ Tesseract.js `rectangle` option ส่ง Original Image เต็มภาพ + พิกัดเข้า `recognize()` แทนการ manual crop ผ่าน `<canvas>` | Tesseract crop เองภายใน WASM memory — เข้มงวดกว่าที่ ocr-strategy.md §4 ร่างไว้อีก เพราะไม่มี object รูปครอปเกิดขึ้นในโค้ดแอปเราเลยแม้แต่ชั่วคราว |
+| CDN default สำหรับโหลด Tesseract worker/core/traineddata (ไม่ self-host) | ตามคำสั่งชัดเจนของผู้ใช้ที่ Phase 4 kickoff: ถ้า offline model ซับซ้อนเกินไปสำหรับ demo ให้ทำ implementation ที่ใช้งานได้ก่อนแล้วบันทึกข้อจำกัด (ดู ocr-strategy.md §5.4) — first-use ต้องมีเน็ต, หลังจากนั้น browser cache ให้ offline ได้เอง |
+| Fixed OCR region (`DEFAULT_OCR_REGION`) ไม่มี UI ลากกรอบ | ตรงตามที่อนุญาตไว้ใน Phase 4 kickoff ("ไม่จำเป็นต้องทำระบบลากกรอบอิสระที่ซับซ้อน") |
+| เพิ่ม dependency `tesseract.js@7.0.0` (pinned exact) | จำเป็นสำหรับ client-side OCR ตามที่สั่งชัดเจน ตรวจ package.json ก่อนแล้วว่ายังไม่มี |
+| Image compression (`src/lib/image/compressImage.ts`) resize+re-encode ภาพเต็ม ไม่ crop | ตรงตาม Phase 4 spec ข้อ 8 ("ถ้าทำ compression ให้เป็นการแปลง Original Image ไม่ใช่ OCR crop") |
+| `saveOfflineReading()` (Phase 3) ขยายให้รับ `ocrValue` + `image` (required) แทนการสร้างฟังก์ชัน save คู่ขนาน | เป็น entrypoint การบันทึกเดียวที่มีอยู่แล้ว การขยาย input ตรงไปตรงมากว่าการมี 2 ฟังก์ชันซ้ำซ้อน — caller เดียว (page.tsx) จึงไม่กระทบโค้ดอื่น |
+
+**บั๊กที่พบระหว่าง browser test (แก้ก่อน commit)**: ทดสอบด้วยภาพขนาดเล็กผิดปกติ (ใกล้ 1x1 พิกเซล) ทำให้ rectangle ที่คำนวณได้หลุดขอบภาพ และ Tesseract/Leptonica **abort ทั้ง WASM worker** แทนที่จะโยน error ที่ดักได้ — แก้โดยเพิ่ม clamp ใน `regionToRectangle()` ให้ rectangle อยู่ในขอบเขตภาพเสมอ (มีผลเฉพาะภาพที่เล็กผิดปกติมาก ภาพจากกล้องจริงไม่ชนกรณีนี้) และเพิ่มข้อความแจ้งเตือนเมื่อกดชัตเตอร์ตอนวิดีโอยังไม่พร้อม (`videoWidth === 0`) แทนการไม่ทำอะไรแบบเงียบๆ
+
+**ทดสอบจริงด้วย Playwright**: fake camera device (`--use-fake-device-for-media-stream`) ยืนยัน permission/preview/overlay/shutter UI ทำงานถูกต้อง (แม้ frame capture จาก fake device จะไม่ผ่านเนื่องจาก `videoWidth` ไม่ populate ในสภาพแวดล้อม headless — เป็นข้อจำกัดของ environment ไม่ใช่บั๊กของโค้ด) จึงทดสอบ flow เต็มต่อผ่าน file-upload fallback (ตามที่ได้รับอนุญาตไว้) ด้วยภาพสังเคราะห์ที่มีตัวเลข "001234.5" จริง — **OCR อ่านค่าได้ถูกต้อง 100%** ยืนยัน `ocrValue`/`confirmedValue` แยกกันจริง มีแค่ 1 `ReadingImage` (ต้นฉบับ ไม่มี crop) และ SyncQueue ถูกสร้างสำเร็จ
+
+**สถานะ**: ✅ ไม่มี architectural decision ใหม่ที่ขัดกับของเดิม, ไม่มี OCR API/backend, ไม่มี S3/MinIO, ไม่แก้ Prisma schema
+
+---
+
 ## สถานะ Coding
 
 **Phase 0 (Project Setup) เสร็จสมบูรณ์แล้ว** — โปรเจกต์ Next.js/TypeScript/Tailwind/Prisma package/Docker ถูกสร้างขึ้นจริงตามที่ approve (ดู `README.md` และรายงาน Phase 0)
@@ -218,3 +253,7 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 **Phase 1 — Migration Applied (2026-09-03)**: `CREATE DATABASE rmu_meter` + initial migration (`20260902094529_init`) apply สำเร็จบน PostgreSQL จริง (202.29.22.92:8024) — ตาราง/enum/index/FK ครบตาม schema, ไม่มีข้อมูล application ใดๆ (0 rows ทุกตาราง), commit แล้วขึ้น `main`
 
 **Phase 2 (Offline-first Data Layer) เสร็จแล้ว**: Dexie.js + `src/lib/offline/{db,readingRepository,syncQueueRepository}.ts` implement ตาม offline-strategy.md, test ผ่านครบ (`npm test`), typecheck/lint/build ผ่าน — ยังไม่มี UI/Camera/OCR/API/Auto-sync เรียกใช้งานจริง (Phase 3 เป็นต้นไป) ไม่มี architectural decision ใหม่ที่ขัดกับของเดิม (ดูหัวข้อด้านบน)
+
+**Phase 3 (Meter Reading Workflow) เสร็จแล้ว**: หน้าหลัก (`src/app/page.tsx`) ใช้งานได้ครบ Meter lookup → Month → Previous Reading → Current Reading → Duplicate check → Confirm → Save Offline → History ยืนยันด้วย Playwright จริงรวมถึงกรณี offline — ทดสอบ 29 tests ผ่าน, typecheck/lint/build ผ่าน ยังไม่มี Camera/OCR/API/Auto-sync (Phase 4 เป็นต้นไป)
+
+**Phase 4 (Camera + OCR) เสร็จแล้ว**: Tesseract.js locked + implement จริง, Camera capture พร้อม permission/error handling + file fallback, OCR แยกจาก confirmedValue อย่างเคร่งครัด, เก็บเฉพาะ Original Image (ไม่มี crop ถูก persist) — ยืนยันด้วย Playwright จริงรวมถึง OCR อ่านค่าได้ถูกต้องจากภาพทดสอบ — ทดสอบ 35 tests ผ่าน, typecheck/lint/build ผ่าน ยังไม่มี Auto Sync/API upload (Phase 5 เป็นต้นไป)

@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import CameraCapture from "@/components/CameraCapture";
 import OnlineStatusBadge from "@/components/OnlineStatusBadge";
 import ReadingHistoryList from "@/components/ReadingHistoryList";
+import { compressImage } from "@/lib/image/compressImage";
 import { demoMeters, demoUser } from "@/lib/meters/demoData";
 import { lookupMeter, type DemoMeter } from "@/lib/meters/meterLookup";
 import type { LocalReading } from "@/lib/offline/db";
 import { getReadings } from "@/lib/offline/readingRepository";
+import { recognizeMeterValue } from "@/lib/ocr/ocrProvider";
 import {
   currentMonthValue,
   isFutureMonth,
@@ -28,6 +31,8 @@ function formatMonthThai(monthValue: string): string {
   }).format(date);
 }
 
+type OcrStatus = "idle" | "loading" | "done" | "error";
+
 export default function Home() {
   const [meterCodeInput, setMeterCodeInput] = useState("");
   const [meter, setMeter] = useState<DemoMeter | null>(null);
@@ -39,6 +44,16 @@ export default function Home() {
   const [duplicateReading, setDuplicateReading] = useState<
     LocalReading | undefined
   >();
+
+  const [capturedImageBlob, setCapturedImageBlob] = useState<Blob | null>(
+    null,
+  );
+  const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(
+    null,
+  );
+  const [ocrValue, setOcrValue] = useState("");
+  const [ocrStatus, setOcrStatus] = useState<OcrStatus>("idle");
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
   const [currentValueInput, setCurrentValueInput] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -102,6 +117,15 @@ export default function Home() {
     };
   }, [meter, readingMonth]);
 
+  function resetPhoto() {
+    if (capturedImageUrl) URL.revokeObjectURL(capturedImageUrl);
+    setCapturedImageBlob(null);
+    setCapturedImageUrl(null);
+    setOcrValue("");
+    setOcrStatus("idle");
+    setOcrError(null);
+  }
+
   function selectMeter(next: DemoMeter) {
     setMeter(next);
     setMeterCodeInput(next.code);
@@ -110,6 +134,7 @@ export default function Home() {
     setCurrentValueInput("");
     setSaveError(null);
     setSavedReading(null);
+    resetPhoto();
   }
 
   function handleLookup() {
@@ -130,6 +155,39 @@ export default function Home() {
     setSaveError(null);
     setSavedReading(null);
     setMonthValue(value);
+    resetPhoto();
+    setCurrentValueInput("");
+  }
+
+  // Original full photo only — never an OCR crop (requirement.md §3.3,
+  // decision-log.md). Compression re-encodes the same full frame smaller,
+  // it does not crop it.
+  async function handleImageCaptured(rawBlob: Blob) {
+    const compressed = await compressImage(rawBlob);
+    if (capturedImageUrl) URL.revokeObjectURL(capturedImageUrl);
+    setCapturedImageBlob(compressed);
+    setCapturedImageUrl(URL.createObjectURL(compressed));
+    setOcrValue("");
+    setOcrStatus("idle");
+    setOcrError(null);
+    setCurrentValueInput("");
+  }
+
+  async function handleRunOcr() {
+    if (!capturedImageBlob) return;
+    setOcrStatus("loading");
+    setOcrError(null);
+    try {
+      const text = await recognizeMeterValue(capturedImageBlob);
+      setOcrValue(text);
+      setCurrentValueInput(text);
+      setOcrStatus("done");
+    } catch {
+      setOcrStatus("error");
+      setOcrError(
+        "อ่านค่าอัตโนมัติไม่สำเร็จ (ครั้งแรกต้องต่ออินเทอร์เน็ตเพื่อโหลด OCR) กรุณากรอกค่าด้วยตนเอง",
+      );
+    }
   }
 
   const canSave =
@@ -137,10 +195,12 @@ export default function Home() {
     hasValidCurrentValue &&
     !isFutureMonth(monthValue) &&
     !duplicateReading &&
-    !savedReading;
+    !savedReading &&
+    capturedImageBlob !== null;
 
   async function handleConfirmSave() {
-    if (!meter || currentValueNumber === undefined) return;
+    if (!meter || currentValueNumber === undefined || !capturedImageBlob)
+      return;
     setSaveError(null);
     try {
       const { reading } = await saveOfflineReading({
@@ -149,9 +209,15 @@ export default function Home() {
         recordedBy: demoUser.id,
         previousReading,
         confirmedValue: currentValueNumber,
+        ocrValue: ocrValue || undefined,
+        image: {
+          blob: capturedImageBlob,
+          mimeType: capturedImageBlob.type || "image/jpeg",
+        },
       });
       setSavedReading(reading);
       setCurrentValueInput("");
+      resetPhoto();
       await refreshHistory();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
@@ -291,65 +357,117 @@ export default function Home() {
                 </p>
               </section>
 
-              {/* Current reading */}
-              <section className="flex flex-col gap-1">
-                <label
-                  className="text-sm font-semibold"
-                  htmlFor="current-value"
-                >
-                  ครั้งนี้
-                </label>
-                <input
-                  id="current-value"
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  value={currentValueInput}
-                  onChange={(e) => setCurrentValueInput(e.target.value)}
-                  className="rounded-lg border border-zinc-300 px-3 py-3 text-xl dark:border-zinc-700 dark:bg-zinc-900"
-                  placeholder="กรอกค่ามิเตอร์ปัจจุบัน"
-                />
+              {/* Camera */}
+              <section className="flex flex-col gap-2">
+                <p className="text-sm font-semibold">ภาพมิเตอร์</p>
+                {!capturedImageBlob ? (
+                  <CameraCapture onCapture={handleImageCaptured} />
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={capturedImageUrl ?? undefined}
+                      alt="ภาพมิเตอร์ที่ถ่าย"
+                      className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={resetPhoto}
+                      className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold dark:border-zinc-700"
+                    >
+                      ถ่ายใหม่
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleRunOcr}
+                      disabled={ocrStatus === "loading"}
+                      className="rounded-lg bg-zinc-900 px-4 py-3 font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                    >
+                      {ocrStatus === "loading"
+                        ? "กำลังอ่านตัวเลข..."
+                        : "🔎 อ่านตัวเลข"}
+                    </button>
+
+                    {ocrStatus === "done" && (
+                      <p className="text-sm text-zinc-500">
+                        OCR: <span className="font-semibold">{ocrValue || "(ว่าง)"}</span>
+                      </p>
+                    )}
+                    {ocrError && (
+                      <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">
+                        {ocrError}
+                      </p>
+                    )}
+                  </div>
+                )}
               </section>
 
-              {showLowerThanPreviousWarning && (
-                <p className="rounded-lg bg-red-100 px-3 py-2 text-sm font-semibold text-red-700">
-                  ค่าที่กรอกน้อยกว่าค่าครั้งก่อน โปรดตรวจสอบอีกครั้ง
-                </p>
-              )}
+              {capturedImageBlob && (
+                <>
+                  {/* Current reading */}
+                  <section className="flex flex-col gap-1">
+                    <label
+                      className="text-sm font-semibold"
+                      htmlFor="current-value"
+                    >
+                      แก้ไขค่าที่อ่านได้ / ครั้งนี้
+                    </label>
+                    <input
+                      id="current-value"
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      value={currentValueInput}
+                      onChange={(e) => setCurrentValueInput(e.target.value)}
+                      className="rounded-lg border border-zinc-300 px-3 py-3 text-xl dark:border-zinc-700 dark:bg-zinc-900"
+                      placeholder="กรอกค่ามิเตอร์ปัจจุบัน"
+                    />
+                  </section>
 
-              {usage !== undefined && (
-                <p className="text-lg">
-                  ใช้ไป <span className="font-bold">{usage}</span> หน่วย
-                </p>
-              )}
+                  {showLowerThanPreviousWarning && (
+                    <p className="rounded-lg bg-red-100 px-3 py-2 text-sm font-semibold text-red-700">
+                      ค่าที่กรอกน้อยกว่าค่าครั้งก่อน โปรดตรวจสอบอีกครั้ง
+                    </p>
+                  )}
 
-              {/* Confirmation card */}
-              <section className="flex flex-col gap-1 rounded-xl border border-zinc-300 p-4 text-sm dark:border-zinc-700">
-                <p className="mb-1 font-semibold">ตรวจสอบก่อนบันทึก</p>
-                <p>Meter: {meter.code}</p>
-                <p>ห้อง: {meter.room.name}</p>
-                <p>Zone: {meter.room.zone.name}</p>
-                <p>เดือน: {formatMonthThai(monthValue)}</p>
-                <p>ค่าครั้งก่อน: {previousFound ? previousReading : "-"}</p>
-                <p>ค่าครั้งนี้: {hasValidCurrentValue ? currentValueNumber : "-"}</p>
-                <p>หน่วยที่ใช้: {usage ?? "-"}</p>
-                <p>สถานะ: PENDING_SYNC (จนกว่าจะ sync สำเร็จ)</p>
-                <p className="mt-1 italic text-zinc-500">
-                  ยังไม่ได้แนบภาพ — จะเพิ่มใน Phase 4
-                </p>
-              </section>
+                  {usage !== undefined && (
+                    <p className="text-lg">
+                      ใช้ไป <span className="font-bold">{usage}</span> หน่วย
+                    </p>
+                  )}
 
-              <button
-                type="button"
-                disabled={!canSave}
-                onClick={handleConfirmSave}
-                className="rounded-lg bg-green-600 px-4 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
-              >
-                ตรวจสอบและบันทึก
-              </button>
+                  {/* Confirmation card */}
+                  <section className="flex flex-col gap-1 rounded-xl border border-zinc-300 p-4 text-sm dark:border-zinc-700">
+                    <p className="mb-1 font-semibold">ตรวจสอบก่อนบันทึก</p>
+                    <p>Meter: {meter.code}</p>
+                    <p>ห้อง: {meter.room.name}</p>
+                    <p>Zone: {meter.room.zone.name}</p>
+                    <p>เดือน: {formatMonthThai(monthValue)}</p>
+                    <p>ค่าครั้งก่อน: {previousFound ? previousReading : "-"}</p>
+                    <p>
+                      ค่าครั้งนี้: {hasValidCurrentValue ? currentValueNumber : "-"}
+                    </p>
+                    <p>หน่วยที่ใช้: {usage ?? "-"}</p>
+                    <p>สถานะ: PENDING_SYNC (จนกว่าจะ sync สำเร็จ)</p>
+                    <p className="mt-1 text-zinc-500">ภาพ: แนบแล้ว ✓</p>
+                  </section>
 
-              {saveError && (
-                <p className="text-sm font-medium text-red-600">{saveError}</p>
+                  <button
+                    type="button"
+                    disabled={!canSave}
+                    onClick={handleConfirmSave}
+                    className="rounded-lg bg-green-600 px-4 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
+                  >
+                    ยืนยันและบันทึก
+                  </button>
+
+                  {saveError && (
+                    <p className="text-sm font-medium text-red-600">
+                      {saveError}
+                    </p>
+                  )}
+                </>
               )}
             </>
           )}

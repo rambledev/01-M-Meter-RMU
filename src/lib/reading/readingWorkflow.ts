@@ -8,6 +8,7 @@
 
 import type { LocalReading } from "@/lib/offline/db";
 import {
+  addReadingImage,
   createDraftReading,
   findReadingByMeterAndMonth,
   getReading,
@@ -44,20 +45,29 @@ export async function checkDuplicateReading(
   return findReadingByMeterAndMonth(meterId, readingMonth);
 }
 
+export interface SaveReadingImageInput {
+  blob: Blob; // ORIGINAL full meter photo only — never an OCR crop (decision-log.md)
+  mimeType: string;
+}
+
 export interface SaveReadingInput {
   meterId: string;
   readingMonth: string;
   recordedBy: string;
   previousReading?: number;
   confirmedValue: number;
+  ocrValue?: string; // raw OCR result — kept separate from confirmedValue (ocr-strategy.md §4)
+  image: SaveReadingImageInput;
 }
 
 export interface SaveReadingResult {
   reading: LocalReading;
 }
 
-// Save sequence per item 8 of the Phase 3 spec:
-//   createDraftReading() -> updateReading() -> status PENDING_SYNC -> enqueueForSync()
+// Save sequence per item 8 of the Phase 3 spec (Phase 4 adds ocrValue + the
+// original image, saved via the same Phase 2 repository — no new storage
+// layer, no crop image, ever persisted):
+//   createDraftReading() -> addReadingImage() -> updateReading() -> status PENDING_SYNC -> enqueueForSync()
 // Re-checks for a duplicate right before writing (in addition to whatever the
 // UI already checked) to close the gap between "user looked at the screen"
 // and "user pressed confirm".
@@ -83,7 +93,10 @@ export async function saveOfflineReading(
     previousReading: input.previousReading,
   });
 
+  await addReadingImage(draft.localId, input.image.blob, input.image.mimeType);
+
   await updateReading(draft.localId, {
+    ocrValue: input.ocrValue,
     confirmedValue: input.confirmedValue,
     usage,
     status: "PENDING_SYNC",
