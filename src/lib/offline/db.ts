@@ -1,5 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import type { BillingConfig } from "@/lib/billing/types";
+import type { CheckerDashboard } from "@/lib/checker/types";
+import type { MeterInfo } from "@/lib/meters/types";
 
 // Mirrors Prisma's ReadingStatus enum (prisma/schema.prisma) — do not add new values here
 // without updating the server schema first (see docs/data-model.md).
@@ -54,10 +56,19 @@ export interface SyncQueueItem {
   updatedAt: string;
 }
 
-// Single-row store — this app has one shared billing configuration, not
-// per-user config (no login/multi-tenant concept in this MVP).
+// Single-row store — one shared billing configuration for the whole
+// system (set by Admin), not per-user.
 export interface LocalBillingConfig extends BillingConfig {
   id: "singleton";
+  updatedAt: string;
+}
+
+// Last-known-good copy of a logged-in checker's own dashboard (keyed by
+// their userId) — lets the dashboard, now /checker's landing page, still
+// render while offline in the field (2026-09-06).
+export interface LocalCheckerDashboard extends CheckerDashboard {
+  userId: string;
+  month: string; // "YYYY-MM" this snapshot was fetched for
   updatedAt: string;
 }
 
@@ -66,6 +77,8 @@ class LocalDatabase extends Dexie {
   readingImages!: Table<LocalReadingImage, string>;
   syncQueue!: Table<SyncQueueItem, string>;
   billingConfig!: Table<LocalBillingConfig, string>;
+  cachedMeters!: Table<MeterInfo, string>;
+  checkerDashboard!: Table<LocalCheckerDashboard, string>;
 
   constructor() {
     super("rmu-meter-offline");
@@ -81,6 +94,30 @@ class LocalDatabase extends Dexie {
       readingImages: "localId, localReadingId",
       syncQueue: "id, readingId, status",
       billingConfig: "id",
+    });
+    // 2026-09-04: cachedMeters — a local mirror of GET /api/meters so the
+    // meter list (quick-select, manual code lookup, QR scan resolution)
+    // still works offline after the first successful fetch. Offline-first
+    // is the core architecture principle of this app (tech-stack.md §5) —
+    // moving meter lookup off a static bundled list to a live API call
+    // must not break that guarantee.
+    this.version(3).stores({
+      readings: "localId, serverId, meterId, status, [meterId+readingMonth]",
+      readingImages: "localId, localReadingId",
+      syncQueue: "id, readingId, status",
+      billingConfig: "id",
+      cachedMeters: "id, code",
+    });
+    // 2026-09-06: checkerDashboard — offline cache for the checker role's
+    // new dashboard-first landing page (keyed by userId, now that /checker
+    // has a real login).
+    this.version(4).stores({
+      readings: "localId, serverId, meterId, status, [meterId+readingMonth]",
+      readingImages: "localId, localReadingId",
+      syncQueue: "id, readingId, status",
+      billingConfig: "id",
+      cachedMeters: "id, code",
+      checkerDashboard: "userId",
     });
   }
 }

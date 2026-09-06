@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import MonthYearSelect from "@/components/MonthYearSelect";
 import type { BillingConfig } from "@/lib/billing/types";
 import { buildExportFilename } from "@/lib/export/filename";
 import { currentMonthValue, formatMonthThai } from "@/lib/reading/readingMonth";
@@ -63,15 +64,14 @@ export default function ExportExcelButton({
       <p className="text-sm font-semibold">Export Excel</p>
       <label className="flex flex-col gap-1 text-sm" htmlFor="export-month">
         เดือน
-        <input
+        <MonthYearSelect
           id="export-month"
-          type="month"
           value={monthValue}
-          onChange={(e) => {
-            setMonthValue(e.target.value);
+          onChange={(next) => {
+            setMonthValue(next);
             setMessage(null);
           }}
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-base dark:border-zinc-700 dark:bg-zinc-900"
+          selectClassName="rounded-lg border border-zinc-300 px-3 py-2 text-base dark:border-zinc-700 dark:bg-zinc-900"
         />
       </label>
       <p className="text-xs text-zinc-500">{formatMonthThai(monthValue)}</p>
@@ -79,7 +79,7 @@ export default function ExportExcelButton({
         type="button"
         onClick={handleExport}
         disabled={isExporting}
-        className="rounded-lg bg-zinc-900 px-4 py-3 font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+        className="rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
       >
         {isExporting ? "กำลัง Export..." : "Export Excel"}
       </button>

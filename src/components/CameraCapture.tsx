@@ -102,7 +102,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
         <button
           type="button"
           onClick={startCamera}
-          className="rounded-lg bg-zinc-900 px-4 py-4 text-lg font-bold text-white dark:bg-zinc-100 dark:text-zinc-900"
+          className="rounded-lg bg-emerald-600 px-4 py-4 text-lg font-bold text-white hover:bg-emerald-700"
         >
           📷 ถ่ายภาพมิเตอร์
         </button>

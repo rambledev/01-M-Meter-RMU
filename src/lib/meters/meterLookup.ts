@@ -1,13 +1,10 @@
-import { demoMeters, type DemoMeter } from "./demoData";
-
-export type { DemoMeter };
+import type { MeterInfo } from "./types";
 
 const QR_PREFIX = "METER:";
 
 // Strips the "METER:" QR prefix if present, so a raw meter code and a scanned
-// QR payload both resolve the same way. Phase 4 swaps in a real camera
-// scanner by feeding its decoded string straight into lookupMeter() —
-// no change needed here.
+// QR payload both resolve the same way (src/components/QrScanner.tsx feeds
+// its decoded string straight into lookupMeter(), no change needed here).
 export function parseMeterScanPayload(payload: string): string {
   const trimmed = payload.trim();
   return trimmed.toUpperCase().startsWith(QR_PREFIX)
@@ -15,15 +12,15 @@ export function parseMeterScanPayload(payload: string): string {
     : trimmed;
 }
 
-export function findMeterByCode(code: string): DemoMeter | undefined {
+export function findMeterByCode(meters: MeterInfo[], code: string): MeterInfo | undefined {
   const normalized = code.trim().toUpperCase();
-  return demoMeters.find((meter) => meter.code.toUpperCase() === normalized);
+  return meters.find((meter) => meter.code.toUpperCase() === normalized);
 }
 
-export function findMeterById(id: string): DemoMeter | undefined {
-  return demoMeters.find((meter) => meter.id === id);
+export function findMeterById(meters: MeterInfo[], id: string): MeterInfo | undefined {
+  return meters.find((meter) => meter.id === id);
 }
 
-export function lookupMeter(payload: string): DemoMeter | undefined {
-  return findMeterByCode(parseMeterScanPayload(payload));
+export function lookupMeter(meters: MeterInfo[], payload: string): MeterInfo | undefined {
+  return findMeterByCode(meters, parseMeterScanPayload(payload));
 }

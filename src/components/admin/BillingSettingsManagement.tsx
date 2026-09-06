@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  getBillingConfig,
-  resetBillingConfig,
-  saveBillingConfig,
-} from "@/lib/offline/billingConfigRepository";
-import type { BillingConfig, BillingTier } from "@/lib/billing/types";
+import { updateBillingConfig } from "@/lib/admin/adminApi";
+import { DEFAULT_BILLING_CONFIG } from "@/lib/billing/defaultConfig";
+import { fetchBillingConfig } from "@/lib/billing/billingConfigApi";
 import { validateTiers } from "@/lib/billing/tierValidation";
+import type { BillingConfig, BillingTier } from "@/lib/billing/types";
 
 interface DraftTier {
   minUnit: string;
@@ -24,8 +22,7 @@ function toDraftTiers(tiers: BillingTier[]): DraftTier[] {
 }
 
 // The last tier is always the unlimited one — enforced here rather than via
-// a UI toggle, so it can never be edited into an invalid combination
-// (Phase 6B kickoff §7: "กำหนด tier สุดท้ายเป็นไม่จำกัด").
+// a UI toggle, so it can never be edited into an invalid combination.
 function toBillingTiers(drafts: DraftTier[]): BillingTier[] {
   return drafts.map((d, index) => ({
     minUnit: Number(d.minUnit),
@@ -34,25 +31,35 @@ function toBillingTiers(drafts: DraftTier[]): BillingTier[] {
   }));
 }
 
-export default function BillingSettingsPanel({
-  onSaved,
-}: {
-  onSaved: (config: BillingConfig) => void;
-}) {
+// Admin tab "ตั้งค่าค่าไฟ" — was BillingSettingsPanel.tsx living inline on
+// /checker with per-device IndexedDB storage; moved here 2026-09-06 so it's
+// a single shared PostgreSQL config every /checker device reads (Admin is
+// the role that owns system-wide settings, not each meter reader's own
+// device).
+export default function BillingSettingsManagement() {
   const [ftRate, setFtRate] = useState("");
   const [taxRatePercent, setTaxRatePercent] = useState("");
   const [baseCharge, setBaseCharge] = useState("");
   const [tiers, setTiers] = useState<DraftTier[]>([]);
+  const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    getBillingConfig().then((config) => {
+    let cancelled = false;
+    (async () => {
+      const config = await fetchBillingConfig();
+      if (cancelled) return;
       setFtRate(String(config.ftRate));
       setTaxRatePercent(String(config.taxRatePercent));
       setBaseCharge(String(config.baseCharge));
       setTiers(toDraftTiers(config.tiers));
-    });
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function updateTier(index: number, patch: Partial<DraftTier>) {
@@ -75,10 +82,7 @@ export default function BillingSettingsPanel({
 
   function removeTier(index: number) {
     setSavedMessage(null);
-    setTiers((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      return next;
-    });
+    setTiers((prev) => prev.filter((_, i) => i !== index));
   }
 
   function buildConfig(): BillingConfig {
@@ -102,34 +106,46 @@ export default function BillingSettingsPanel({
     return errs;
   }
 
-  async function handleSave() {
+  async function applyConfig(config: BillingConfig, successMessage: string) {
+    setBusy(true);
+    setErrors([]);
     setSavedMessage(null);
+    try {
+      const saved = await updateBillingConfig(config);
+      setFtRate(String(saved.ftRate));
+      setTaxRatePercent(String(saved.taxRatePercent));
+      setBaseCharge(String(saved.baseCharge));
+      setTiers(toDraftTiers(saved.tiers));
+      setSavedMessage(successMessage);
+    } catch (err) {
+      setErrors([err instanceof Error ? err.message : "บันทึกไม่สำเร็จ"]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSave() {
     const config = buildConfig();
     const validationErrors = validate(config);
     setErrors(validationErrors);
     if (validationErrors.length > 0) return;
-
-    await saveBillingConfig(config);
-    onSaved(config);
-    setSavedMessage("บันทึกการตั้งค่าแล้ว");
+    await applyConfig(config, "บันทึกการตั้งค่าแล้ว");
   }
 
   async function handleReset() {
-    const config = await resetBillingConfig();
-    setFtRate(String(config.ftRate));
-    setTaxRatePercent(String(config.taxRatePercent));
-    setBaseCharge(String(config.baseCharge));
-    setTiers(toDraftTiers(config.tiers));
-    setErrors([]);
-    onSaved(config);
-    setSavedMessage("คืนค่าเริ่มต้นแล้ว");
+    await applyConfig(DEFAULT_BILLING_CONFIG, "คืนค่าเริ่มต้นแล้ว");
+  }
+
+  if (loading) {
+    return <p className="text-sm text-zinc-500">กำลังโหลด...</p>;
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-zinc-300 p-3 dark:border-zinc-700">
-      <p className="text-sm font-semibold">ตั้งค่าการคิดค่าไฟ</p>
+    <section className="flex flex-col gap-3">
+      <h3 className="text-base font-semibold text-emerald-800 dark:text-emerald-400">ตั้งค่าการคิดค่าไฟ</h3>
       <p className="text-xs text-zinc-500">
-        อัตราเหล่านี้เป็นสูตรเบื้องต้นจากเอกสารตัวอย่าง ยังไม่ใช่สูตรทางการที่ได้รับการรับรอง
+        อัตราเหล่านี้เป็นสูตรเบื้องต้นจากเอกสารตัวอย่าง ยังไม่ใช่สูตรทางการที่ได้รับการรับรอง —
+        มีผลกับผู้จดมิเตอร์ทุกเครื่องทันทีที่บันทึก
       </p>
 
       <div className="flex flex-col gap-1">
@@ -264,7 +280,7 @@ export default function BillingSettingsPanel({
         </ul>
       )}
       {savedMessage && (
-        <p className="rounded-lg bg-green-100 px-3 py-2 text-sm font-medium text-green-800">
+        <p className="rounded-lg bg-emerald-100 px-3 py-2 text-sm font-medium text-emerald-800">
           {savedMessage}
         </p>
       )}
@@ -273,14 +289,16 @@ export default function BillingSettingsPanel({
         <button
           type="button"
           onClick={handleSave}
-          className="rounded-lg bg-zinc-900 px-4 py-2 font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900"
+          disabled={busy}
+          className="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
         >
           บันทึกการตั้งค่า
         </button>
         <button
           type="button"
           onClick={handleReset}
-          className="rounded-lg border border-zinc-300 px-4 py-2 font-semibold dark:border-zinc-700"
+          disabled={busy}
+          className="rounded-lg border border-zinc-300 px-4 py-2 font-semibold disabled:opacity-50 dark:border-zinc-700"
         >
           คืนค่าเริ่มต้น
         </button>

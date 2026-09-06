@@ -24,3 +24,24 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Print-only-this-element trick, used by PrintQrModal (src/components/
+   admin/PrintQrModal.tsx): hide the whole page (including the modal's own
+   chrome — title bar, close/print buttons), then make just the QR grid
+   visible again and pull it out of the modal's fixed-position overlay so
+   it lays out as a normal printed page instead of a screen-sized overlay. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+}

@@ -60,6 +60,7 @@ model Zone {
   id        String   @id @default(cuid())
   name      String
   rooms     Room[]
+  users     User[]   @relation("UserResponsibleZones") // ผู้ใช้งานที่รับผิดชอบโซนนี้ (admin UI, 2026-09-04)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -107,11 +108,14 @@ model Reading {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  role      Role
-  readings  Reading[]
-  createdAt DateTime @default(now())
+  id               String    @id @default(cuid())
+  name             String
+  username         String?   @unique // nullable: existing rows predate this field (2026-09-04 admin UI) — required at the application layer for new users
+  passwordHash     String? // salted scrypt hash (src/lib/admin/password.ts) — never plaintext, never returned by any API
+  role             Role
+  responsibleZones Zone[]    @relation("UserResponsibleZones") // many-to-many, admin UI "โซนที่รับผิดชอบ" (2026-09-04)
+  readings         Reading[]
+  createdAt        DateTime  @default(now())
 }
 
 model SyncLog {
@@ -121,6 +125,15 @@ model SyncLog {
   attemptedAt DateTime @default(now())
   status      ReadingStatus   // สถานะ ณ ตอนพยายาม sync ครั้งนี้
   errorReason String?         // เก็บ error message เมื่อ status = SYNC_ERROR (workflow.md §3: ห้าม fail เงียบๆ)
+}
+
+model BillingConfig {
+  id             String   @id @default("singleton") // แถวเดียวเสมอ — ค่ากลางของทั้งระบบ ตั้ง/แก้ที่ Admin แท็บ "ตั้งค่าค่าไฟ" (2026-09-06, เดิมเป็น per-device ใน IndexedDB)
+  ftRate         Float
+  taxRatePercent Float
+  baseCharge     Float
+  tiers          Json     // BillingTier[] — src/lib/billing/types.ts
+  updatedAt      DateTime @updatedAt
 }
 ```
 

@@ -1,4 +1,3 @@
-import { DEFAULT_BILLING_CONFIG } from "@/lib/billing/defaultConfig";
 import type { BillingConfig } from "@/lib/billing/types";
 import { db, type LocalBillingConfig } from "./db";
 
@@ -13,23 +12,17 @@ function toBillingConfig(stored: LocalBillingConfig): BillingConfig {
   return { ftRate, taxRatePercent, baseCharge, tiers };
 }
 
-// Seeds the default config on first read so every later read/save sees a
-// stable, already-persisted row (Phase 6B kickoff §6: "ถ้ายังไม่มี config:
-// สร้าง Default Configuration อัตโนมัติ").
-export async function getBillingConfig(): Promise<BillingConfig> {
+// Offline-cache only — the Billing Configuration itself lives in PostgreSQL
+// now (Admin edits it at /admin, tab "ตั้งค่าค่าไฟ"; src/lib/billing/
+// billingConfigApi.ts fetches it). This table just remembers the last
+// successfully-fetched copy so /checker keeps working while offline (moved
+// from being the source of truth to a read cache, 2026-09-06).
+export async function getCachedBillingConfig(): Promise<BillingConfig | null> {
   const stored = await db.billingConfig.get(SINGLETON_ID);
-  if (stored) return toBillingConfig(stored);
-
-  await saveBillingConfig(DEFAULT_BILLING_CONFIG);
-  return DEFAULT_BILLING_CONFIG;
+  return stored ? toBillingConfig(stored) : null;
 }
 
-export async function saveBillingConfig(config: BillingConfig): Promise<void> {
+export async function saveCachedBillingConfig(config: BillingConfig): Promise<void> {
   const row: LocalBillingConfig = { ...config, id: SINGLETON_ID, updatedAt: nowIso() };
   await db.billingConfig.put(row);
-}
-
-export async function resetBillingConfig(): Promise<BillingConfig> {
-  await saveBillingConfig(DEFAULT_BILLING_CONFIG);
-  return DEFAULT_BILLING_CONFIG;
 }

@@ -57,6 +57,9 @@ async function main() {
     create: { id: "ME-003", code: "ME-003", roomId: room201.id },
   });
 
+  // No username/passwordHash/responsibleZones seeded — this row can't log
+  // into /checker's real login (2026-09-06) until an Admin sets those via
+  // the "ข้อมูลผู้ใช้งาน" tab, same as any other user.
   await prisma.user.upsert({
     where: { id: "demo-user-1" },
     update: {},

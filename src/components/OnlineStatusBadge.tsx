@@ -33,12 +33,12 @@ export default function OnlineStatusBadge() {
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
         isOnline
-          ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
           : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
       }`}
     >
       <span
-        className={`h-2 w-2 rounded-full ${isOnline ? "bg-green-600" : "bg-amber-600"}`}
+        className={`h-2 w-2 rounded-full ${isOnline ? "bg-emerald-600" : "bg-amber-600"}`}
       />
       {isOnline ? "ONLINE" : "OFFLINE"}
     </span>
