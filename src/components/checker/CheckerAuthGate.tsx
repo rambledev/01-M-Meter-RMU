@@ -9,6 +9,20 @@ import {
 } from "@/lib/checker/checkerSession";
 import type { CheckerSession } from "@/lib/checker/types";
 
+// Field Calibration testing convenience (2026-09-14): when both are set,
+// auto-logs in as a fixed test account instead of showing the login
+// screen, so a tester can jump straight to /checker/reading without typing
+// credentials every time. Must be NEXT_PUBLIC_ to reach the client bundle
+// at all (same lesson as NEXT_PUBLIC_GOOGLE_CLIENT_ID elsewhere in this
+// app — see docs/decision-log.md). Goes through the REAL loginChecker()
+// call below, not a fabricated session, so the account still has to exist
+// for real — see prisma/ensureCheckerBypassUser.cjs for the matching
+// "checker-01" account this is meant to pair with. Leave unset in
+// production; only meaningful while this phase's real-device testing is
+// ongoing.
+const BYPASS_USERNAME = process.env.NEXT_PUBLIC_CHECKER_BYPASS_USERNAME;
+const BYPASS_PASSWORD = process.env.NEXT_PUBLIC_CHECKER_BYPASS_PASSWORD;
+
 // Gates every /checker/** page behind a login screen (2026-09-06's login
 // feature) — a render-prop rather than a Context provider since there are
 // only 3 consumers (dashboard/reading/history), each already client
@@ -28,7 +42,29 @@ export default function CheckerAuthGate({
     let cancelled = false;
     (async () => {
       const stored = getCheckerSession();
-      if (!cancelled) setSession(stored);
+      if (stored) {
+        if (!cancelled) setSession(stored);
+        return;
+      }
+
+      if (BYPASS_USERNAME && BYPASS_PASSWORD) {
+        try {
+          const result = await loginChecker(BYPASS_USERNAME, BYPASS_PASSWORD);
+          saveCheckerSession(result);
+          if (!cancelled) setSession(result);
+          return;
+        } catch (err) {
+          if (!cancelled) {
+            setError(
+              err instanceof Error
+                ? `Bypass login (${BYPASS_USERNAME}) ไม่สำเร็จ: ${err.message}`
+                : "Bypass login ไม่สำเร็จ",
+            );
+          }
+        }
+      }
+
+      if (!cancelled) setSession(null);
     })();
     return () => {
       cancelled = true;

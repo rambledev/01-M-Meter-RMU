@@ -16,6 +16,7 @@ const eslintConfig = defineConfig([
     "prisma/seed.cjs",
     "prisma/seedReadings.cjs",
     "prisma/deleteSeedReadings.cjs",
+    "prisma/ensureCheckerBypassUser.cjs",
   ]),
 ]);
 
