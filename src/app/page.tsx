@@ -19,6 +19,12 @@ const ROLES = [
     icon: "📊",
     href: "/executive",
   },
+  {
+    label: "ผู้พักอาศัย",
+    description: "ดูประวัติการจดมิเตอร์และค่าไฟเฉพาะห้องของตัวเอง",
+    icon: "🏠",
+    href: "/resident",
+  },
 ] as const;
 
 // Home page — role-select landing page (no real login in this MVP, see

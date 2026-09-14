@@ -269,7 +269,6 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
           <MonthYearSelect
             value={monthValue}
             onChange={setMonthValue}
-            max={currentMonthValue()}
             selectClassName="rounded-lg border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
           />
         </div>

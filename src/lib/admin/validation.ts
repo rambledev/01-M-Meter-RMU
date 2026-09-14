@@ -37,3 +37,13 @@ export function validateZoneIds(value: unknown): string[] | null {
   if (!value.every((v) => typeof v === "string")) return null;
   return value;
 }
+
+// RESIDENT accounts log in via Google (@rmu.ac.th only — src/lib/resident/
+// googleAuth.ts enforces this at login time too); an Admin-provisioned
+// email must already be in that domain, or the account could never
+// actually be used to log in.
+export function validateResidentEmail(value: unknown): string | null {
+  const email = validateRequiredString(value);
+  if (!email) return null;
+  return email.toLowerCase().endsWith("@rmu.ac.th") ? email.toLowerCase() : null;
+}

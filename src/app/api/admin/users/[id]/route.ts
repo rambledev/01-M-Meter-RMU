@@ -6,7 +6,9 @@ import { hashPassword } from "@/lib/admin/password";
 import type { UserDTO } from "@/lib/admin/types";
 import {
   isValidRole,
+  validateOptionalString,
   validateRequiredString,
+  validateResidentEmail,
   validateZoneIds,
 } from "@/lib/admin/validation";
 
@@ -15,6 +17,7 @@ async function listUsers(): Promise<UserDTO[]> {
     include: {
       _count: { select: { readings: true } },
       responsibleZones: { select: { id: true, name: true } },
+      residentRoom: { include: { zone: { select: { name: true } } } },
     },
     orderBy: { name: "asc" },
   });
@@ -22,14 +25,20 @@ async function listUsers(): Promise<UserDTO[]> {
     id: u.id,
     name: u.name,
     username: u.username,
+    email: u.email,
     role: u.role,
     responsibleZones: u.responsibleZones,
+    residentRoom: u.residentRoom
+      ? { id: u.residentRoom.id, name: u.residentRoom.name, zoneName: u.residentRoom.zone.name }
+      : null,
     readingCount: u._count.readings,
   }));
 }
 
 // Password is optional here: a blank/absent value means "keep the current
 // password" — the edit form never shows or requires the existing one.
+// RESIDENT accounts have no password at all (Google login) — username/
+// password are only required for every other role.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -37,16 +46,23 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json().catch(() => null);
   const name = validateRequiredString(body?.name);
-  const username = validateRequiredString(body?.username);
   const zoneIds = validateZoneIds(body?.zoneIds);
+  const roomId = validateOptionalString(body?.roomId);
   if (!name) return apiError(400, "VALIDATION_ERROR", "กรุณาระบุชื่อ-สกุล");
-  if (!username) return apiError(400, "VALIDATION_ERROR", "กรุณาระบุ Username");
   if (!isValidRole(body?.role)) {
     return apiError(400, "VALIDATION_ERROR", "กรุณาเลือกบทบาทให้ถูกต้อง");
   }
   if (!zoneIds) return apiError(400, "VALIDATION_ERROR", "โซนที่รับผิดชอบไม่ถูกต้อง");
 
-  const newPassword = validateRequiredString(body?.password);
+  const isResident = body.role === "RESIDENT";
+  const email = isResident ? validateResidentEmail(body?.email) : null;
+  const username = isResident ? null : validateRequiredString(body?.username);
+  if (isResident && !email) {
+    return apiError(400, "VALIDATION_ERROR", "กรุณาระบุอีเมล @rmu.ac.th ให้ถูกต้อง");
+  }
+  if (!isResident && !username) return apiError(400, "VALIDATION_ERROR", "กรุณาระบุ Username");
+
+  const newPassword = isResident ? null : validateRequiredString(body?.password);
 
   try {
     await prisma.user.update({
@@ -54,18 +70,20 @@ export async function PATCH(
       data: {
         name,
         username,
+        email,
         role: body.role,
         responsibleZones: { set: zoneIds.map((zid) => ({ id: zid })) },
+        residentRoom: roomId ? { connect: { id: roomId } } : { disconnect: true },
         ...(newPassword ? { passwordHash: await hashPassword(newPassword) } : {}),
       },
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError) {
       if (err.code === "P2025") {
-        return apiError(404, "NOT_FOUND", "ไม่พบผู้ใช้งานนี้ (หรือไม่พบโซนที่เลือกบางรายการ)");
+        return apiError(404, "NOT_FOUND", "ไม่พบผู้ใช้งานนี้ (หรือไม่พบโซน/ห้องพักที่เลือกบางรายการ)");
       }
       if (err.code === "P2002") {
-        return apiError(409, "DUPLICATE", "มี Username นี้อยู่แล้วในระบบ");
+        return apiError(409, "DUPLICATE", isResident ? "มีอีเมลนี้อยู่แล้วในระบบ" : "มี Username นี้อยู่แล้วในระบบ");
       }
     }
     return apiError(500, "INTERNAL_ERROR", "แก้ไขผู้ใช้งานไม่สำเร็จ");

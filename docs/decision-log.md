@@ -714,3 +714,232 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 - ไม่มี console/page error — `npx tsc --noEmit`/`npm run lint`/`npm test` (125 tests)/`npm run build` ผ่านทั้งหมด
 
 **สถานะ**: ✅ ไม่มีการเปลี่ยน API/schema/logic ใดๆ — เป็นการปรับ CSS class (Tailwind utility) ล้วน ไม่กระทบพฤติกรรมของระบบ
+
+---
+
+## ✅ ตัวเลือกเดือนแสดงครบ 12 เดือนเสมอทุกจุด (2026-09-07)
+
+**บริบท**: ผู้ใช้ขอให้ "ส่วนเลือกเดือนไม่ว่าส่วนใดๆ" แสดงเดือนครบทั้ง 12 เดือนเสมอ (เดิม `MonthYearSelect` บางจุดรับ prop `max` ตัดตัวเลือกเดือนที่ยังไม่ถึงออกจาก dropdown ในปีปัจจุบัน) โดยยังคง default เป็นเดือนปัจจุบันไว้
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| ลบ prop `max` ออกจาก `MonthYearSelect.tsx` ทั้งหมด (ไม่ใช่แค่เลิกส่งค่า แต่ลบ logic การตัดตัวเลือกออกจาก component เอง) แล้วเอา `max={currentMonthValue()}` ออกจากทั้ง 3 จุดที่เคยส่ง (`/checker` dashboard filter, `/checker/reading` เดือนอ่าน, Admin "ห้องที่ยังไม่จดมิเตอร์") | ผู้ใช้ระบุ "ไม่ว่าส่วนใดๆ" ครอบคลุมทุกจุดที่ใช้ component นี้ — ลบออกจาก component กลางจุดเดียวรับประกันว่าจุดที่จะเพิ่มในอนาคตก็ได้พฤติกรรมเดียวกันโดยอัตโนมัติ ไม่ต้องจำไปเซ็ตทุกจุดเอง |
+| **ไม่แตะ** กฎ "ห้ามเลือกเดือนอนาคต" (`isFutureMonth` check ใน `handleMonthChange` ของหน้าจดมิเตอร์) — ยังคง block การเลือกเดือนอนาคตไว้เหมือนเดิม เพียงเปลี่ยนจาก "ซ่อนตัวเลือกไม่ให้เลือกได้" เป็น "เลือกได้แต่ระบบเตือนแล้วไม่ยอมเปลี่ยนค่า" | คำขอนี้เป็นเรื่อง**การแสดงผล**ของ dropdown (`ให้แสดงเดือนครบ 12 เดือน`) ไม่ใช่การขอยกเลิกกฎธุรกิจที่ว่าห้ามจดมิเตอร์ล่วงหน้าเดือนที่ยังไม่ถึง (กฎนี้มีมาตั้งแต่ Phase 3) — ทั้งสองอย่างแยกกันได้ ไม่ขัดกัน |
+| **พบและแก้บั๊กแฝงที่ถูกเปิดเผยจากการเปลี่ยนนี้**: ข้อความ "ห้ามเลือกเดือนอนาคต" เดิมถูก render อยู่ในเงื่อนไข `{capturedImageBlob && (...)}` เท่านั้น (ซ่อนอยู่ลึกใต้ขั้นตอนถ่ายภาพ) ทำให้ก่อนหน้านี้ error นี้ไม่เคยแสดงจริงเลยแม้แต่ครั้งเดียว เพราะ dropdown เดิมซ่อนเดือนอนาคตไปแล้วตั้งแต่ต้น (unreachable code จริงๆ) — เพิ่ม render error message อีกจุดทันทีใต้ month select (แสดงคู่ขนานกับจุดเดิม ไม่ลบของเดิม เผื่อ error จากขั้นตอนบันทึกจริงที่เกิดตอนมีรูปแล้ว) | การลบ `max` ทำให้ผู้ใช้เลือกเดือนอนาคตได้จริงเป็นครั้งแรก (ก่อนหน้านี้ไม่เคยเป็นไปได้เลยเพราะ dropdown บล็อกไว้ก่อน) เส้นทาง error message เดิมที่ไม่เคย reachable มาก่อนจึงกลายเป็นบั๊กจริงที่ผู้ใช้เจอได้ทันที (เลือกเดือนอนาคต → ไม่มีอะไรเกิดขึ้นเลย ไม่มีคำอธิบาย) ต้องแก้พร้อมกันในรอบเดียวกัน ไม่ปล่อยเป็นบั๊กใหม่ที่เพิ่งเปิดเผย |
+
+**ทดสอบจริงด้วย Playwright ต่อ dev server + PostgreSQL จริง**: ตรวจ dropdown ทั้ง 4 จุด (`/checker` dashboard filter, `/checker/reading` เดือนอ่าน, `/checker/history` Export Excel, Admin "ห้องที่ยังไม่จดมิเตอร์") แสดงครบ 12 เดือนทุกจุดจริง และ default ยังเป็นเดือนปัจจุบัน (กันยายน 2569) ถูกต้องทุกจุด — ที่หน้าจดมิเตอร์ ลองเลือก "ตุลาคม" (เดือนอนาคต) ยืนยันว่าเห็นข้อความ "ห้ามเลือกเดือนอนาคต" ทันที และ dropdown เด้งกลับไปกันยายนอัตโนมัติ (ไม่ใช่ปล่อยให้ค้างที่ตุลาคมแบบเงียบๆ) — `npx tsc --noEmit`/`npm run lint`/`npm test` (125 tests)/`npm run build` ผ่านทั้งหมด
+
+**สถานะ**: ✅ ไม่มีการเปลี่ยน API/schema ใดๆ — ปรับ UI component + แก้บั๊ก error message ที่ไม่เคยแสดงผลจริงมาก่อน
+
+---
+
+## ✅ หน้าบันทึกมิเตอร์: พิมพ์ค่าเองได้โดยไม่ต้องรอถ่ายภาพ/รัน OCR ก่อน (2026-09-07)
+
+**บริบท**: ผู้ใช้ขอให้หน้าบันทึกมิเตอร์ด้วย OCR "สามารถพิมพ์เลขมิเตอร์เองได้ด้วย" — ตรวจโค้ดเดิมพบว่าช่องกรอกค่า ("แก้ไขค่าที่อ่านได้ / ครั้งนี้") มีอยู่แล้วจริง แต่ถูกซ่อนไว้ใน `{capturedImageBlob && (...)}` คือ **ต้องถ่ายภาพก่อนเสมอ ช่องพิมพ์เลขถึงจะปรากฏ** — ทำให้การพิมพ์เองรู้สึกเหมือนเป็นแค่ "แก้ไขค่าที่ OCR อ่านมา" ไม่ใช่ทางเลือกที่เท่าเทียมกันตั้งแต่ต้น
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| ย้ายช่องกรอกค่า (เปลี่ยน label จาก "แก้ไขค่าที่อ่านได้ / ครั้งนี้" เป็น "ค่ามิเตอร์ครั้งนี้") ให้ **แสดงผลเสมอ** ไม่ต้องรอถ่ายภาพก่อน — พิมพ์ได้ทันทีที่เข้าหน้า | ตรงตามคำขอตรงตัว "พิมพ์เลขมิเตอร์เองได้ด้วย" — เดิมทำได้แค่ "แก้ไข" ค่าที่ OCR อ่านมาแล้วเท่านั้น ไม่ใช่พิมพ์เป็นทางเลือกแรกได้จริง |
+| **ไม่ตัดข้อกำหนดเรื่องภาพออก** — ยังคง "ต้องถ่ายภาพก่อนจึงจะกดยืนยันและบันทึกได้" (`canSave` ยังเช็ค `capturedImageBlob !== null` เหมือนเดิมทุกประการ) เพียงแค่ตอนนี้พิมพ์ค่าได้ก่อนถ่ายภาพก็ได้ (ลำดับไม่บังคับ) | กฎ "ต้องมีภาพแนบทุก reading" เป็นการตัดสินใจตั้งแต่ Phase 3/4 (ป้องกันความผิดพลาด/หลักฐานยืนยัน) — คำขอนี้พูดถึงแค่ "พิมพ์เลขเองได้" ไม่ได้ขอให้เอาข้อกำหนดเรื่องภาพออก จึงคงไว้ตามเดิม เปลี่ยนแค่ว่า "พิมพ์ก่อนหรือหลังถ่ายภาพก็ได้" |
+| การ์ด "ตรวจสอบก่อนบันทึก" เปลี่ยนเงื่อนไขการแสดงจาก `capturedImageBlob` เป็น `hasValidCurrentValue` (มีค่าที่กรอกแล้วก็เห็นการ์ดได้เลย) และบรรทัด "ภาพ" เปลี่ยนจากข้อความคงที่ "แนบแล้ว ✓" เป็นข้อความแบบมีเงื่อนไข: "แนบแล้ว ✓" หรือ **"ยังไม่ได้ถ่ายภาพ — ต้องถ่ายภาพก่อนจึงจะบันทึกได้"** (สีเหลืองอำพันเน้น) | ผู้ใช้พิมพ์ค่าก่อนถ่ายภาพได้แล้ว แต่ปุ่ม "ยืนยันและบันทึก" จะยัง disabled อยู่จนกว่าจะมีภาพ — ต้องมีข้อความอธิบายชัดเจนว่าทำไมกดไม่ได้ ไม่ปล่อยให้ผู้ใช้งงว่าทำไมพิมพ์ค่าแล้วกดบันทึกไม่ติด |
+
+**ทดสอบจริงด้วย Playwright ต่อ dev server + PostgreSQL จริง** (สร้างมิเตอร์ทดสอบชั่วคราว "ME-MANUALTEST" ผ่าน Admin API เพื่อทดสอบโดยไม่กระทบข้อมูลจริง ลบออกหลังทดสอบเสร็จ — reading ที่บันทึกระหว่างทดสอบไม่เคย sync ขึ้น server เลยไม่มีอะไรต้องลบฝั่ง DB เพิ่มเติม):
+- เข้าหน้าเดือนอ่าน (ยังไม่ถ่ายภาพเลย) → เห็นช่อง "ค่ามิเตอร์ครั้งนี้" อยู่แล้วทันที พิมพ์ค่าได้ → การ์ด "ตรวจสอบก่อนบันทึก" ปรากฏพร้อมคำนวณหน่วยที่ใช้/ค่าไฟถูกต้อง แต่บรรทัดภาพขึ้นเตือนสีเหลือง "ยังไม่ได้ถ่ายภาพ" และปุ่ม "ยืนยันและบันทึก" ยัง disabled ตามที่ออกแบบไว้
+- แนบภาพ (ไม่กด "อ่านตัวเลข"/ไม่ใช้ OCR เลย) แล้วพิมพ์ค่าเอง → การ์ดอัปเดตเป็น "แนบแล้ว ✓" ปุ่มเปลี่ยนเป็นกดได้ → กดยืนยันบันทึกสำเร็จ ยืนยันว่า flow "พิมพ์เองล้วนๆ ไม่พึ่ง OCR เลย" ใช้งานได้จริงตั้งแต่ต้นจนจบ
+- ไม่มี console/page error — `npx tsc --noEmit`/`npm run lint`/`npm test` (125 tests)/`npm run build` ผ่านทั้งหมด
+
+**สถานะ**: ✅ ไม่มีการเปลี่ยน API/schema ใดๆ — ปรับ UI/เงื่อนไขการแสดงผลในหน้าเดียว (`/checker/reading`) ล้วน ลบมิเตอร์ทดสอบออกจาก PostgreSQL จริงหลังทดสอบเรียบร้อยแล้ว ยืนยันสะอาด
+
+---
+
+## ✅ MOCK_DATA: รันทั้งแอปแบบออฟไลน์ล้วนด้วยข้อมูล mock เมื่อฐานข้อมูลจริงต่อไม่ได้ (2026-09-08)
+
+**บริบท**: ฐานข้อมูล PostgreSQL จริง (`202.29.22.92:8024`) ต่อไม่ได้ (ping/TCP timeout จริง ไม่ใช่แค่ปัญหาโค้ด — ดูรายละเอียดการวินิจฉัยในบทสนทนา) ผู้ใช้ขอให้ "เปลี่ยนมาใช้ข้อมูล mock up ให้รันแบบ offline ได้" — ถามยืนยันแล้วว่าต้องการ **mock data แบบ hardcode ในโค้ดจริง** (ไม่ใช่แค่สลับไปใช้ local PostgreSQL ผ่าน Docker ที่มีอยู่แล้วใน `docker-compose.yml`)
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| จุดสลับมีจุดเดียว: `src/lib/db/prisma.ts` เช็ค env var `MOCK_DATA=true` แล้ว export `mockPrismaClient` (cast เป็น `PrismaClient`) แทน `new PrismaClient()` จริง — **ทุก route ยังเรียก `prisma.model.method(...)` เหมือนเดิมทุกตัวอักษร ไม่ต้องแก้โค้ด route แม้แต่บรรทัดเดียว** | ลด risk ให้ต่ำที่สุด — ถ้าแก้ทุก route ให้มี if/else มีทั้ง route ~15 ไฟล์ที่ต้องแก้และเสี่ยง behavior เพี้ยนไปจากของจริง การ swap ที่จุดเดียวรับประกันว่า route ทำงานเหมือนเดิมทุกประการไม่ว่าจะต่อ DB จริงหรือ mock |
+| `src/lib/db/mockPrisma.ts` เป็น **hand-rolled ครอบคลุมเฉพาะ query pattern ที่โค้ดจริงเรียกใช้จริง** (grep หา `prisma\.\w+\.\w+(` ทั่ว repo แล้ว implement ให้ครบทุกแบบ) ไม่ใช่ generic Prisma engine ที่ตีความ `where`/`include` แบบครอบจักรวาล | Prisma มี query surface กว้างมาก การเขียน engine ทั่วไปให้ตรงพฤติกรรมจริง 100% เสี่ยงบั๊กแฝงมากกว่าและใช้เวลานานกว่าการ implement เฉพาะ ~50 จุดที่ใช้จริงในโปรเจกต์นี้ให้ถูกต้องแม่นยำ |
+| Error ที่ route เช็คด้วย `err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025"/"P2002"` (not found / unique constraint) — mock throw **`Prisma.PrismaClientKnownRequestError` ตัวจริง** (import จาก `@prisma/client` เหมือนกัน สร้าง instance เองได้โดยไม่ต้องต่อ DB) ไม่ใช่ error class ปลอมของตัวเอง | รับประกันว่า `instanceof` check เดิมในทุก route (404/409 responses ที่ถูกต้อง) ยังทำงานถูกเป๊ะ ไม่ต้องแก้ error-handling ในแต่ละ route เลย |
+| ข้อมูล seed ในตัว (`src/lib/db/mockStore.ts`): 3 โซน, 6 ห้อง, 6 มิเตอร์, ผู้ใช้ demo 1 คน (`checker-demo` / `Demo1234!` — precompute scrypt hash เดียวกับที่ `hashPassword()` จริงสร้าง ตรวจแล้วว่า login ผ่าน `verifyPassword()` จริงได้), ประวัติการอ่าน 3 เดือนต่อมิเตอร์ (18 รายการ) | ให้ทุกหน้าจอ (Admin/Checker/Executive) มีข้อมูลให้ดูได้ทันทีไม่ต้องเริ่มจากศูนย์ ครอบคลุม feature ครบ (login, dashboard, ประวัติ, กราฟแนวโน้ม) |
+| ข้อมูล mock **อยู่ใน memory เท่านั้น ไม่ persist ลงไฟล์/ดิสก์เลย** — แก้ไข/เพิ่ม/ลบผ่าน UI ระหว่างใช้งานได้ปกติ (create/update/delete จริง) แต่รีสตาร์ท dev server แล้วรีเซ็ตกลับไปเป็นชุด seed เริ่มต้นเสมอ | เหมาะกับจุดประสงค์ "ใช้ demo/พัฒนาได้ระหว่างฐานข้อมูลจริงมีปัญหา" — ไม่ต้องมีขั้นตอน cleanup ข้อมูลทดสอบแบบที่ต้องทำกับฐานข้อมูลจริงทุกครั้งที่ผ่านมาในเซสชันนี้ (รีสตาร์ทคือ "ลบข้อมูลทดสอบ" ในตัว) |
+| เพิ่ม `MOCK_DATA` ใน `.env.example` (default `false`, มีคอมเมนต์อธิบาย) และตั้ง `MOCK_DATA=true` ใน `.env` จริงตอนนี้ (เพราะฐานข้อมูลจริงต่อไม่ได้อยู่) | ทำให้ตอนนี้แอปใช้งานได้ทันทีแบบออฟไลน์ — เมื่อฐานข้อมูลจริงกลับมาต่อได้แล้ว แค่แก้ `.env` เป็น `MOCK_DATA=false` (หรือลบบรรทัดทิ้ง) แล้ว restart ก็กลับไปใช้ข้อมูลจริงได้ทันที ไม่ต้องแก้โค้ดใดๆ เพิ่ม |
+
+**ทดสอบจริงด้วย Playwright ต่อ dev server ที่รันด้วย `MOCK_DATA=true` (ปิดการเชื่อมต่อ PostgreSQL จริงโดยสิ้นเชิงระหว่างทดสอบ)**:
+- `/admin` Dashboard โหลด KPI ได้ถูกต้อง, แท็บ "จัดการมิเตอร์" ทดสอบ CRUD ครบวงจรบนโซน (สร้าง → แก้ไข → ลบแบบ cascade ผ่าน mock `$transaction`) สำเร็จทุกขั้นตอน, แท็บ "ข้อมูลผู้ใช้งาน" และ "ตั้งค่าค่าไฟ" โหลดข้อมูลถูกต้อง
+- `/checker` login ด้วยบัญชี mock (`checker-demo`/`Demo1234!`) สำเร็จ → เห็น dashboard พร้อมมิเตอร์ตามโซนที่รับผิดชอบ → เข้าไปจดมิเตอร์ตัวหนึ่ง (แนบภาพ+พิมพ์ค่าเอง ไม่ใช้ OCR) บันทึกลง IndexedDB สำเร็จ (ยังคง offline-first ปกติฝั่ง client) → กลับ dashboard กด "Sync ข้อมูล" ส่งขึ้น mock `/api/readings/sync` สำเร็จ
+- `/executive` โหลดกราฟ BI ครบทั้ง 5 แผงจากข้อมูล mock ถูกต้อง (แนวโน้ม 3 เดือน, เปรียบเทียบโซน, สถานะข้อมูล)
+- ไม่มี console/page error ตลอดทั้ง flow — พบและแก้บั๊ก 2 จุดระหว่างทดสอบจริง (ไม่ใช่แค่เขียนแล้วไม่ตรวจ): `reading.findMany` เดิม shortcut คืนแค่ `{id}` เมื่อมี `select` โดยไม่ดู shape จริง (พังหน้า `/executive` ที่ select ซับซ้อนกว่า `{id:true}` ธรรมดา) และ `meter.findMany` ไม่ได้ implement `include.readings` (พังหน้า `/checker` dashboard) — แก้ทั้งคู่แล้วทดสอบซ้ำผ่านหมด
+- ยืนยันด้วยว่าข้อมูล mock อยู่ใน memory จริง ไม่ persist: รีสตาร์ท dev server แล้ว query `/api/admin/zones` กลับไปเป็น 3 โซนเริ่มต้นพอดี (ข้อมูลทดสอบที่สร้าง/ลบระหว่างทดสอบหายไปเองโดยไม่ต้อง cleanup manual)
+- `npx tsc --noEmit`/`npm run lint`/`npm test` (125 tests)/`npm run build` ผ่านทั้งหมด
+
+**สถานะ**: ✅ ไม่มีการเปลี่ยน schema/migration ใดๆ — เพิ่มไฟล์ mock layer ใหม่ 2 ไฟล์ + แก้ `src/lib/db/prisma.ts` จุดเดียวเป็นทางเข้าออกเดียว ทุก route/business-logic เดิมไม่ถูกแตะเลยแม้แต่บรรทัดเดียว
+
+---
+
+## ✅ เพิ่ม role "ผู้พักอาศัย" (Resident) — ดูประวัติ/ค่าไฟเฉพาะห้องตัวเอง (2026-09-09)
+
+**บริบท**: ผู้ใช้ขอเพิ่ม role ผู้พักอาศัย ขอบเขต "ดูประวัติการจดมิเตอร์และยอดค่าไฟ เฉพาะห้องที่ตัวเองอยู่ ข้อมูลตัวเองเท่านั้น เลือกเดือนได้" — schema เดิมมี `Role.RESIDENT` อยู่แล้วตั้งแต่ Phase 1 แต่ไม่เคยมีหน้า/ฟีเจอร์จริงมาใช้งานเลย (ตอนนั้นเผื่อไว้ล่วงหน้า) และไม่มีความสัมพันธ์เชื่อม User กับ Room เจาะจงตัวเดียว (มีแต่ `Room.residentName` ซึ่งเป็นแค่ข้อความ ไม่ใช่บัญชีผู้ใช้งาน) — ระหว่างทำ พบว่าฐานข้อมูลจริงกลับมาต่อได้แล้ว (ตรวจสอบยืนยันด้วย query จริง) เลยทำ migration จริงพร้อมกันไปด้วยแทนที่จะพึ่ง mock อย่างเดียว
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| เพิ่ม `User.residentRoomId` (nullable FK เดี่ยวไปที่ `Room`, `onDelete: SetNull`) แทนที่จะใช้ many-to-many แบบ `responsibleZones` ของผู้จดมิเตอร์ | ผู้พักอาศัยควรเห็นข้อมูลได้ "เฉพาะห้องที่ตัวเองอยู่" — ความหมายคือห้องเดียวจริงๆ ไม่ใช่หลายห้องแบบโซนที่รับผิดชอบของผู้จดมิเตอร์ ความสัมพันธ์แบบ one-to-many (Room มีได้หลาย resident, User มีได้ห้องเดียว) ตรงกับความหมายจริงมากกว่า |
+| Migration เป็นการเพิ่ม column nullable + FK อย่างเดียว (ไม่แก้/ลบของเดิม) — รันจริงกับฐานข้อมูล remote ที่กลับมาต่อได้แล้ว ไม่ใช่แค่เตรียมไฟล์ไว้เฉยๆ | ตรวจสอบแล้วว่าฐานข้อมูลกลับมาใช้งานได้จริง (query จริงสำเร็จ) จึงรัน migration ทันทีตามธรรมเนียมเดิมของโปรเจกต์ (ทุก schema change ต้อง deploy จริงไม่ปล่อยรอไว้) |
+| `POST /api/resident/login` และ `GET /api/resident/history` แยกเป็น route ใหม่ของตัวเอง (ไม่ใช้ route เดียวกับ checker) — history route เช็ค `user.residentRoomId` แล้ว query มิเตอร์ที่ `roomId` ตรงกับห้องนั้นเท่านั้น ไม่มีทางรับพารามิเตอร์ห้อง/ผู้ใช้อื่นจากภายนอกได้เลย | ข้อกำหนด "ข้อมูลตัวเองเท่านั้น" ต้อง enforce ที่ server ไม่ใช่แค่ UI ไม่ส่ง — resident ไม่มี zone แบบผู้จดมิเตอร์ (many rooms) จึง scope ด้วย roomId เดียวที่ผูกกับ user โดยตรง ปลอดภัยกว่าการกรองแค่ฝั่ง client |
+| ยอดค่าไฟต่อรอบคำนวณด้วย `calculateBilling()` ตัวเดียวกับทุกหน้าจอ (ไม่มีสูตรที่สอง) ทั้งฝั่ง server (สรุปในตาราง "ประวัติทั้งหมด") และฝั่ง client ผ่าน `BillingBreakdownPanel` ที่มีอยู่แล้ว (สำหรับเดือนที่เลือกดูรายละเอียด มี "ดูวิธีคำนวณ" ให้กดขยายได้) | ตรงกับกฎเดิม (Phase 6B): ห้ามมีสูตรค่าไฟอีกชุด — ใช้ component ที่มีอยู่แล้วโดยตรงแทนสร้างใหม่ |
+| ตัวเลือกเดือนใช้ `MonthYearSelect` เดิม (ครบ 12 เดือน default ปัจจุบัน) เหมือนทุกจุดอื่นในเว็บ — ไม่ต้อง `max` เพราะดูของที่ผ่านมาแล้วเท่านั้น ไม่มีการ "จดมิเตอร์" ที่ต้องกันเดือนอนาคต | สอดคล้องกับ pattern ที่ปรับให้ตัวเลือกเดือนทั้งเว็บแสดงครบ 12 เดือนเสมอ (2026-09-07) และไม่มีความจำเป็นต้อง block เดือนอนาคตในหน้านี้ (ดูข้อมูลอย่างเดียว ไม่ใช่บันทึกข้อมูล) |
+| Admin "ข้อมูลผู้ใช้งาน" ปรับฟอร์มให้ **แสดงเฉพาะ UI ที่เกี่ยวกับ role ที่เลือก**: checkbox โซนแสดงเฉพาะ METER_READER, dropdown ห้องแสดงเฉพาะ RESIDENT (เดิมแสดง checkbox โซนทุก role แม้ไม่มีความหมาย) | ลดความสับสน — ฟิลด์ที่ไม่มีความหมายกับ role ที่เลือกไม่ควรโผล่ให้กรอก แก้ไปพร้อมกันตอนเพิ่มฟิลด์ใหม่เพราะจุดเดียวกัน |
+| อัปเดต mock layer (`mockStore.ts`/`mockPrisma.ts`) ให้รองรับ `residentRoomId`/`residentRoom` ครบเหมือนกับ field อื่นๆ ที่มีอยู่แล้ว พร้อมเพิ่ม resident demo account (`resident-demo`/`Resident123!`) | ฟีเจอร์ใหม่ต้องใช้งานได้ทั้ง 2 โหมด (mock/DB จริง) เหมือนกันเสมอ ตามหลักการเดิมที่ตั้งไว้ตอนสร้าง mock layer — พบและแก้บั๊กแฝงเพิ่ม 2 จุดระหว่างทำ (ดูด้านล่าง) |
+
+**บั๊กแฝงที่พบและแก้ระหว่างทำ (จาก mock layer เดิม)**: `meter.findMany` เดิมรองรับ `where.roomId` แค่รูปแบบ `{ in: [...] }` เท่านั้น (ที่ cascadeDelete ใช้) — resident history route เรียกด้วย `roomId` เป็น string เดี่ยวตรงๆ ทำให้พังใน mock mode จนกว่าจะเพิ่มรองรับทั้ง 2 รูปแบบ; และ `reading.findMany` เดิมไม่มี `orderBy` เลย (คืนตามลำดับที่ถูกสร้างในหน่วยความจำเท่านั้น) ทำให้ประวัติของ resident (และจริงๆ แล้วก็หน้า admin/export ที่ใช้ mock มาตลอด) ไม่ได้เรียงตามเดือนจริง — เพิ่ม `orderBy.readingMonth`/`orderBy.meterId` ให้ครบ
+
+**ทดสอบจริงด้วย Playwright ทั้ง 2 โหมด**:
+- **Mock mode**: login ผิดรหัสถูก reject, login ถูกสำเร็จเห็น "ห้อง 80/1 · โซน บ้านพัก", เลือกเดือนสิงหาคมเห็น breakdown ค่าไฟถูกต้อง (หน่วยที่ใช้/ค่าไฟพื้นฐาน/FT/ภาษี/รวม), ตาราง "ประวัติทั้งหมด" เห็นแค่ 3 รายการของห้องตัวเอง (ไม่เห็นห้องอื่น), logout ทำงานถูกต้อง; ทดสอบ Admin สร้างผู้ใช้ role RESIDENT พร้อมกำหนดห้องสำเร็จ (สร้าง+ลบข้อมูลทดสอบเรียบร้อย)
+- **DB จริง** (ยืนยันแล้วว่ากลับมาต่อได้ปกติ): สลับ `MOCK_DATA=false` ชั่วคราว สร้างบัญชีทดสอบผ่าน Admin API จริง กำหนดห้อง 201 (วรุณ 1) → login สำเร็จได้ห้องถูกต้อง → history คืนประวัติจริงของมิเตอร์ ME-001 ห้องนั้นถูกต้องพร้อมค่าไฟคำนวณแล้ว → ลบบัญชีทดสอบออกจาก PostgreSQL จริงเรียบร้อย ยืนยันสะอาด
+- `npx tsc --noEmit`/`npm run lint`/`npm test` (125 tests)/`npm run build` ผ่านทั้งหมด (route ใหม่ `/api/resident/login`, `/api/resident/history`, หน้า `/resident` ขึ้นครบ)
+
+**สถานะ**: ✅ Migration ใหม่ (`prisma/migrations/20260909104716_add_resident_room_link/`) เป็นการเพิ่ม column nullable ล้วนๆ — applied กับ PostgreSQL จริงแล้ว, ทดสอบผ่านทั้ง mock mode และ DB จริง, `.env` คงไว้ที่ `MOCK_DATA=false` (กลับไปใช้ฐานข้อมูลจริงตามที่ผู้ใช้ยืนยันหลังพบว่าเชื่อมต่อได้ปกติแล้ว)
+
+---
+
+## ✅ Resident login เปลี่ยนเป็น Google Sign-In เฉพาะโดเมน @rmu.ac.th + เลือกห้องเองครั้งแรก (2026-09-09)
+
+**บริบท**: ผู้ใช้ขอเปลี่ยน login ของ role ผู้พักอาศัยจาก username/password (ที่เพิ่งทำไปในงานก่อนหน้า) เป็น "login ด้วย gmail @rmu.ac.th เท่านั้น" — และเนื่องจากยังไม่มีข้อมูลเชื่อมว่า email ไหนพักห้องใด จึงให้ผู้ใช้เลือกห้องของตัวเองเองครั้งแรกหลัง login สำเร็จ ("แล้วผู้ว่าห้องนี้เป็นของ email ไหน เพื่อให้สามารถดูข้อมูลของตัวเองย้อนหลังได้") ยืนยันแล้วว่า: มี Google Cloud OAuth Client ID อยู่แล้ว (ผู้ใช้จะเอามาใส่ `.env` เอง) และอนุญาตให้หลาย email ต่อห้องเดียวกันได้ (เพื่อนร่วมห้อง ไม่ต้อง exclusive)
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| ใช้ **Google Identity Services (GIS)** ฝั่ง client (สคริปต์ `accounts.google.com/gsi/client` โหลดแบบ dynamic, `google.accounts.id.renderButton`) ส่ง ID token (JWT ที่ Google เซ็นมาให้) ไปตรวจสอบที่ server เท่านั้น — client ไม่เชื่อ token เองเลย | มาตรฐานของ Google เอง ปลอดภัยกว่าการเขียน OAuth flow เองหรือเชื่อ email ที่ client อ้างมาโดยไม่ตรวจลายเซ็น |
+| ตรวจ ID token ด้วย **`google-auth-library`** (`OAuth2Client.verifyIdToken({idToken, audience: clientId})`) แล้วเช็ค `email_verified === true` และ `email` ลงท้าย `@rmu.ac.th` ก่อนถือว่าล็อกอินผ่าน — ปฏิเสธทันทีถ้าไม่ตรงโดเมนแม้ token จะถูกต้องก็ตาม | การเช็คโดเมนต้องทำกับ **email ที่ Google ยืนยันแล้วเท่านั้น** (ผ่านลายเซ็นที่ตรวจสอบแล้ว) ไม่ใช่เชื่อ claim ดิบจาก client — ป้องกันคนนอกโดเมนสมัคร Google account อีเมลอื่นแล้วปลอมอ้างว่าเป็น @rmu.ac.th |
+| ลบ `username`/`password`/`passwordHash` ออกจาก resident **ทั้งหมด** (ไม่ใช่แค่ทางเลือกเสริม) — เพิ่ม `User.email` (unique, nullable) แทน ใช้เฉพาะกับ role RESIDENT เท่านั้น ส่วน ADMIN/METER_READER ยังคง username/password เดิมทุกประการ | ตรงตามคำขอ "เท่านั้น" — ผู้ใช้ระบุชัดว่าต้องการ Google login เพียงอย่างเดียวสำหรับ resident ไม่ใช่ทางเลือกเสริมข้าง username/password |
+| Auto-provision: login ด้วย Google สำเร็จครั้งแรกของอีเมลที่ไม่เคยเห็นมาก่อน → สร้าง `User` role RESIDENT ให้อัตโนมัติ (ยังไม่มีห้อง) โดยไม่ต้องให้ Admin สร้างล่วงหน้าก่อน (ต่างจาก METER_READER ที่ Admin ต้องสร้างทุกบัญชี) | resident มีจำนวนมากกว่าผู้จดมิเตอร์มาก บังคับให้ Admin สร้างทุกบัญชีล่วงหน้าไม่สมเหตุผล — Admin ยังสร้าง/กำหนดห้องล่วงหน้าเองได้ถ้าต้องการ (ผ่านฟอร์มเดิมที่ตอนนี้มีช่องอีเมลแทน username/password เมื่อเลือก role RESIDENT) กรณีนั้น login ครั้งแรกแค่จับคู่กับ record ที่มีอยู่ |
+| ไม่มี exclusivity constraint บนคู่ email-ต่อ-room — `residentRoomId` ยังเป็น nullable FK ธรรมดา ไม่ unique ฝั่ง Room จึงอนุญาตหลาย `User` ชี้ห้องเดียวกันได้ | ยืนยันจากผู้ใช้ตรงๆ ว่า "อนุญาตหลาย email ต่อห้องได้ (แนะนำ)" — เพื่อนร่วมห้องหลายคนต้องดูข้อมูลห้องเดียวกันได้พร้อมกัน |
+| Self-service room picker (`RoomPicker` component ในหน้า `/resident`) แสดงทุกครั้งที่ `room === null` (ครั้งแรก) และมีปุ่ม "เปลี่ยนห้อง" ให้เปิดใหม่ได้ทุกเมื่อ — บันทึกผ่าน `PATCH /api/resident/room` (ไม่มีการตรวจสิทธิ์ห้องอื่นเพิ่มเติม เพราะไม่มี exclusivity ให้ตรวจ) | ไม่มีข้อมูลเชื่อม email-ห้องมาก่อนเลย จึงต้องให้ผู้ใช้ยืนยันด้วยตัวเอง — "เปลี่ยนห้อง" เป็นฟีเจอร์เสริมที่จำเป็นเพราะเลือกเองมีโอกาสเลือกผิด/ย้ายห้องจริงได้ |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` เป็น env var เดียว ใช้ทั้งฝั่ง client (initialize ปุ่ม Google) และฝั่ง server (เป็นค่า `audience` ตรวจสอบ token) — เพิ่ม placeholder ว่างไว้ใน `.env.example` เท่านั้น **ไม่แก้ `.env` จริง** เพราะผู้ใช้ระบุว่าจะเอา Client ID ที่มีอยู่แล้วมาใส่เอง | Client ID ของ Google OAuth ไม่ใช่ความลับ (เห็นได้จาก network request ของหน้าเว็บอยู่แล้ว) จึงใช้ `NEXT_PUBLIC_` ได้ตามปกติ — ไม่เติมค่าเดาลง `.env` เพราะอาจไม่ตรงกับของจริงที่ผู้ใช้มี |
+
+**บั๊กที่พบและแก้ระหว่างทำ (mock layer)**: `prisma.user.create()`/`update()` เดิมสมมติว่ามี `responsibleZones`/`username`/`role` ครบทุกครั้งเสมอ (throw ถ้าไม่มี) — แต่ route ล็อกอิน Google ที่ auto-provision เรียก `create({ data: { name, email, role } })` แบบไม่มี `responsibleZones` เลย และ route เลือกห้อง (`PATCH /api/resident/room`) เรียก `update({ data: { residentRoom: {...} } })` แบบไม่มี `name`/`username`/`role` เลย — ทำให้พังใน mock mode ทันที แก้โดยทำให้ทุกฟิลด์ใน `data` ของทั้ง `create`/`update` เป็น optional และอัปเดตเฉพาะฟิลด์ที่ส่งมาจริง
+
+**ทดสอบจริงด้วย Playwright ต่อ dev server + PostgreSQL จริง** (ไม่มีทางทดสอบปุ่ม Google Sign-In จริงได้เพราะต้องมีบัญชี Google จริง จึงทดสอบเท่าที่ทำได้จริงแทน):
+- ยิง `POST /api/resident/google-login` ด้วย credential ปลอม (`"garbage-not-a-jwt"`) และแบบไม่ส่ง credential เลย → ได้ 401/400 พร้อมข้อความไทยที่ถูกต้องทั้งคู่ (ปฏิเสธได้จริงโดยไม่ต้องมี Google infra จริง)
+- สร้างบัญชีทดสอบ role RESIDENT ผ่าน Admin API จริง (ไม่มีห้อง) → inject session ลง `localStorage` ตรง (`rmu-resident-session`) เพื่อข้ามปุ่ม Google จริง แล้วเปิดหน้า `/resident` → เห็น `RoomPicker` ทันทีเพราะ `room === null` → เลือกห้อง "201 (วรุณ 1)" กดยืนยัน → บันทึกสำเร็จ, header เปลี่ยนเป็น "ห้อง 201 · โซน วรุณ 1", `localStorage` อัปเดตห้องถูกต้อง, ปุ่ม "เปลี่ยนห้อง" เปิด picker ซ้ำได้จริง, ประวัติ/ค่าไฟของห้องนั้นแสดงถูกต้องครบ (ทดสอบด้วยห้องที่มีข้อมูลจริงอยู่แล้ว) — ไม่มี console error ตลอด
+- ทดสอบฟอร์ม Admin "ข้อมูลผู้ใช้งาน" เลือก role ผู้พักอาศัย → ฟิลด์ username/password หายไป เหลือช่องอีเมลแทนตามที่ออกแบบ → กรอกอีเมล `@rmu.ac.th` แล้วบันทึกสำเร็จจริงกับ PostgreSQL จริง (มี network latency ~1.7s เพราะฐานข้อมูลอยู่ไทยแลนด์ ไม่ใช่บั๊ก)
+- ลบบัญชีทดสอบทั้งหมดออกจาก PostgreSQL จริงหลังทดสอบเรียบร้อยทุกบัญชี
+- `npx tsc --noEmit`/`npm run lint`/`npm test` (128 tests)/`npm run build` ผ่านทั้งหมด — ระหว่างแก้ก็พบว่า `eslint-plugin-react-hooks` เวอร์ชันที่โปรเจกต์นี้ใช้ (v7) มี rule `react-hooks/set-state-in-effect` จริง (ไม่ใช่ `exhaustive-deps` แบบเดิม) และ effect ในหน้า `/resident` เรียก `setLoading(false)` ตรงๆ ในตัว effect (ไม่ใช่ใน callback async) ทำให้ error — ย้ายเข้าไปในฟังก์ชัน async เดียวกับส่วนที่เหลือแก้ได้
+
+**สถานะ**: ✅ Migration ใหม่ (`prisma/migrations/20260909170455_add_user_email/`) เพิ่ม column `email` (nullable, unique) — applied กับ PostgreSQL จริงแล้ว, ลบ route login เดิม (`/api/resident/login`) ทิ้งทั้งหมด, `.env.example` มี placeholder `NEXT_PUBLIC_GOOGLE_CLIENT_ID` แล้ว รอผู้ใช้เติมค่าจริงใน `.env` เอง ทดสอบทุกส่วนที่ทำได้โดยไม่ต้องมีบัญชี Google จริงผ่านหมด
+
+---
+
+## ✅ ห้ามผู้พักอาศัยเปลี่ยนห้องเอง — ล็อกได้ครั้งเดียว, Admin เท่านั้นที่แก้ไขได้ (2026-09-10)
+
+**บริบท**: ผู้ใช้พบว่าปุ่ม "เปลี่ยนห้อง" ที่เพิ่มไว้ในงานก่อนหน้า (Google OAuth resident login) เป็นช่องโหว่ — เพราะไม่มี exclusivity constraint บน email-ต่อ-room (ตั้งใจอนุญาตหลาย email ต่อห้องได้ เพื่อรองรับเพื่อนร่วมห้อง) ผู้พักอาศัยที่ตั้งใจไม่ดีสามารถกด "เปลี่ยนห้อง" สลับไปเลือกห้องอื่นซ้ำไปซ้ำมาเพื่อดูข้อมูลของห้องที่ไม่ใช่ของตัวเองได้ตลอดเวลา — ผู้ใช้สั่งให้เอาปุ่มนี้ออก และให้ Admin เท่านั้นที่มีสิทธิ์ตรวจสอบ/แก้ไขการเชื่อม User↔Room
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| ล็อกที่ **server** (`PATCH /api/resident/room` เช็ค `if (user.residentRoomId) return apiError(403, ...)` ก่อนอนุญาตให้ผูกห้องใหม่) ไม่ใช่แค่ซ่อนปุ่มฝั่ง UI | การซ่อนปุ่มอย่างเดียวป้องกันไม่ได้จริง — ใครก็เรียก `PATCH /api/resident/room` ตรงๆ ผ่าน API ได้โดยไม่ผ่าน UI เลย ต้อง enforce ที่ server เท่านั้นจึงปิดช่องโหว่ได้จริงตามที่ผู้ใช้กังวล ("ป้องกันการดูข้อมูลของห้องอื่น") |
+| Self-service room picker ยังคงไว้ **เฉพาะครั้งแรก** (`residentRoomId === null`) ไม่ได้ตัดออกทั้งหมด | ยังจำเป็นต้องมีทางเชื่อม email↔room ครั้งแรกอยู่ดี เพราะ Google login ไม่รู้ห้องเอง — ผู้ใช้สั่งห้าม "เปลี่ยน" (การแก้ของที่มีอยู่แล้ว) ไม่ได้สั่งห้ามการ "เลือกครั้งแรก" (การสร้างของใหม่ที่ยังไม่มี) ทั้งสองกรณีมีความหมายต่างกัน |
+| ลบปุ่ม "เปลี่ยนห้อง" และ state `pickingRoom` ออกจาก `/resident/page.tsx` ทั้งหมด (ไม่ใช่แค่ disabled) พร้อมเพิ่มข้อความเตือนในหน้าเลือกห้องครั้งแรกว่า "เลือกได้ครั้งเดียวเท่านั้น หากต้องการเปลี่ยนภายหลังกรุณาติดต่อผู้ดูแลระบบ" | UI ที่ตรงกับสิทธิ์จริงชัดเจนกว่า disabled ปุ่มไว้เฉยๆ — ผู้ใช้ควรรู้ตั้งแต่ตอนเลือกครั้งแรกว่าเลือกผิดแล้วต้องพึ่ง Admin ไม่ใช่มาเจอทีหลังว่ากดปุ่มไม่ได้ |
+| Admin ยังแก้ไขการเชื่อม User↔Room ได้ตามปกติผ่าน `/admin` แท็บ "ข้อมูลผู้ใช้งาน" (dropdown ห้องที่มีอยู่แล้วจากงานก่อนหน้า) — ไม่ต้องเพิ่ม UI/route ใหม่ | Admin API (`PATCH /api/admin/users/[id]`) ไม่มีการล็อกแบบเดียวกันนี้อยู่แล้ว (ของเดิมรองรับเปลี่ยน `residentRoomId` ได้เสมอ) ตรงตามที่ผู้ใช้ต้องการ "admin เท่านั้นที่มีสิทธิ์ตรวจเช็คและแก้ไข" โดยไม่ต้องแก้อะไรเพิ่ม |
+
+**ทดสอบจริงกับ PostgreSQL จริงผ่าน Playwright + curl**:
+- สร้างบัญชีทดสอบใหม่ (ยังไม่มีห้อง) → เรียก `PATCH /api/resident/room` เลือกห้อง "80/1" ครั้งแรก → สำเร็จ (200) → เรียกซ้ำเพื่อเปลี่ยนเป็นห้อง "80/2" → ถูกปฏิเสธจริง (403, "เปลี่ยนห้องเองไม่ได้ กรุณาติดต่อผู้ดูแลระบบ") ยืนยันว่าล็อกที่ server จริง ไม่ใช่แค่ UI
+- เปิดหน้า `/resident` ด้วย session ที่มีห้องแล้ว (inject localStorage) → ยืนยันว่าไม่มีปุ่ม "เปลี่ยนห้อง" และไม่มี room picker โผล่มาอีกเลย ไม่มี console error
+- ลบบัญชีทดสอบออกจาก PostgreSQL จริงหลังทดสอบเรียบร้อย
+- `npx tsc --noEmit`/`npm run lint`/`npm test` (128 tests) ผ่านทั้งหมด
+
+**สถานะ**: ✅ ไม่มีการเปลี่ยน schema/migration ใดๆ (ยังใช้ `residentRoomId` เดิม) — แก้แค่ `PATCH /api/resident/room` (เพิ่มเช็ค 403) และตัด UI ส่วน "เปลี่ยนห้อง" ออกจาก `/resident/page.tsx`
+
+---
+
+## ✅ Meter ROI Guide — กลับมา crop จริงใน memory เพื่อ preprocess ก่อน OCR (2026-09-14)
+
+**บริบท**: ผู้ใช้ขอปรับเฉพาะส่วน Camera + OCR ของ `/checker/reading` ให้มี pipeline `Capture → Crop ROI → Preprocess → OCR` (resize 2-4x, grayscale, contrast, threshold, denoise) เพื่อตัด label อื่นบนหน้าปัด (เช่น "KILOWATT-HOUR METER", "220V") ออกจากผลลัพธ์ และเพิ่ม validation หลัง OCR (ตัวเลขล้วน + จำนวนหลักสมเหตุผล + confidence threshold) — ตรวจโค้ดเดิมพบว่าขัดกับ decision ✅ Locked ของ Phase 4 ("ไม่จัดเก็บ OCR Crop Image แบบถาวร") ในจุดที่เข้มงวดกว่านั้นอีกขั้น: Phase 4 implementation จริงเลือกส่ง Original Image เต็มภาพ + `rectangle` เข้า `worker.recognize()` ให้ Tesseract crop เองใน WASM **เพื่อไม่ให้มี crop object เกิดขึ้นในโค้ดแอปเลยแม้แต่ชั่วคราว** — แจ้งผู้ใช้และขอ confirm ก่อนเปลี่ยนจุดนี้เพราะเป็นการ supersede decision ที่เคย lock ไว้
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| **Supersede decision Phase 4 เฉพาะจุด "ไม่มี crop object แม้ชั่วคราว"** — ยอมให้มี crop image เกิดขึ้นใน memory/client ระหว่างประมวลผล OCR ได้ (ผู้ใช้ confirm แล้ว) | Preprocessing (grayscale/contrast/threshold/denoise) ต้องแก้ไข pixel data จริง ทำผ่าน Tesseract `rectangle` param อย่างเดียวไม่ได้ — เป็นข้อจำกัดทางเทคนิคที่หลีกเลี่ยงไม่ได้ถ้าจะทำ preprocessing จริง |
+| กฎหลัก **"ไม่จัดเก็บ OCR Crop Image แบบถาวร" (2026-09-02) ยังคงอยู่ไม่เปลี่ยน** — `saveOfflineReading()`/`addReadingImage()` ยังรับเฉพาะภาพต้นฉบับเต็มภาพ (`compressImage()` ผลลัพธ์) เหมือนเดิมทุกจุด ภาพ crop+preprocess ถูกสร้างเฉพาะใน `handleRunOcr()` แล้วทิ้งทันทีหลังได้ผลลัพธ์ ไม่ถูกส่งต่อไปที่ save flow เลย | ตรงตามข้อกำหนด "ห้ามแก้ saveOfflineReading()" ของผู้ใช้ และไม่ขัดกับ data-model.md/offline-strategy.md ที่ยังระบุว่า `ReadingImage`/`originalImageBlob` เก็บแค่ต้นฉบับเท่านั้น |
+| Crop ใช้ `DEFAULT_OCR_REGION` เดิม (x:0.15, y:0.375, w:0.7, h:0.25) เป็นฐาน ไม่เปลี่ยนตำแหน่ง/ขนาดกรอบ | ผู้ใช้ confirm ให้ใช้ค่าเดิม — กรอบนี้ทดสอบแล้วว่าใช้งานได้จริงมาตั้งแต่ Phase 4 |
+| OCR whitelist คงไว้ `"0123456789."` (รองรับทศนิยม) ไม่ตัดเหลือแค่ `0-9`; validation ใหม่ (`ocrValidation.ts`) ยอมรับความยาว 4-6 หลัก ไม่บังคับ 5 หลักตายตัว | ผู้ใช้ confirm เลือกแบบยืดหยุ่นกว่า requirement เดิมที่ขอมา — มิเตอร์จริงในระบบมีค่าทศนิยม (เช่น test fixture "001234.5") การบังคับ 5 หลักจำนวนเต็มล้วนจะตัดการใช้งานจริงบางส่วนออกไป |
+| `recognizeMeterValue()` เปลี่ยน signature: รับเฉพาะภาพที่ crop+preprocess แล้ว (ไม่มี `region`/`rectangle` param อีกต่อไป), คืนค่าเป็น `{ value, confidence }` (confidence จาก Tesseract `data.confidence` หาร 100 ให้เป็นสเกล 0-1) แทน raw string เดิม | ต้องมี confidence ออกมาให้ `ocrValidation.ts` ใช้ตัดสินใจ — Tesseract คำนวณค่านี้ให้อยู่แล้วแต่โค้ดเดิมทิ้งไป ไม่ได้ใช้ |
+| แยก Component เดิม `CameraCapture.tsx` เป็น `components/meter/{MeterCamera,MeterGuideOverlay,MeterCaptureButton,MeterPreview}.tsx` และ Image pipeline เป็น `lib/image/{meterCrop,meterPreprocess}.ts` + `lib/ocr/ocrValidation.ts` — ลบ `CameraCapture.tsx` ทิ้ง (grep แล้วไม่มีที่อื่นใช้) | ตรงตาม component structure ที่ผู้ใช้ระบุมา — แยกความรับผิดชอบชัดเจน (เปิดกล้อง / กรอบ overlay / ปุ่มถ่าย / preview+OCR trigger) โดยพฤติกรรม getUserMedia/error-handling/file-fallback เดิมของ `CameraCapture.tsx` ย้ายเข้า `MeterCamera.tsx` แบบคัดลอกทั้งหมด ไม่แก้ logic |
+| `meterCrop.ts`/`meterPreprocess.ts` เป็น browser-only (canvas/`createImageBitmap`) ไม่มี vitest unit test — ตามแนวทางเดียวกับ `compressImage.ts` เดิม | canvas API ไม่มีใน Node/vitest environment ของโปรเจกต์นี้ — `ocrValidation.ts`/`regionToRectangle()` (pure math/string logic) มี vitest unit test ตามปกติ |
+
+**ผลกระทบต่อ workflow การบันทึก**: ไม่มี — `saveOfflineReading`, duplicate checking, previousReading workflow, billing calculation, confirmation flow ไม่ถูกแก้ไขแม้แต่บรรทัดเดียว มีแค่ `handleRunOcr()` ใน `checker/reading/page.tsx` ที่เปลี่ยน (เพิ่ม crop→preprocess→validate ก่อนเรียก `recognizeMeterValue()`)
+
+**ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (134 tests, เพิ่ม `ocrValidation.test.ts` 6 tests ใหม่), `npm run build` ผ่านทั้งหมด — **ยังไม่ได้ทดสอบจริงบนกล้องมือถือ/Playwright** (ไม่มี Playwright infra อยู่ในโปรเจกต์นี้แล้วตอนนี้) จึงยังไม่ยืนยันความแม่นยำของ preprocessing (scale/contrast/threshold ที่เลือกไว้เป็นค่าเริ่มต้นที่สมเหตุผลแต่ยังไม่ผ่านการทดสอบกับภาพมิเตอร์จริง) — ควรทดสอบกับภาพจริงก่อนขึ้น production และปรับค่า `PreprocessOptions`/`MIN_CONFIDENCE` ตามผลจริงที่ได้
+
+**สถานะ**: ✅ Implementation เสร็จ, รอทดสอบภาพมิเตอร์จริงเพื่อ tune ค่า preprocessing/threshold ก่อนใช้งานจริง
+
+---
+
+## ✅ Real-time OCR Preview — live suggestion only, ไม่แตะ save workflow (2026-09-14)
+
+**บริบท**: ต่อยอดจาก "Meter ROI Guide" ด้านบน — ผู้ใช้ขอให้ OCR ทำงานแบบ real-time ระหว่างที่ยังไม่กดยืนยัน แทนที่จะรอกดปุ่ม "อ่านตัวเลข" ครั้งเดียว รองรับ 2 mode: **Camera Mode** (OCR ต่อเนื่องบน video frame ระหว่างเปิดกล้อง) และ **Upload Image Mode** (เพิ่ม editor ให้ zoom/pan/ปรับ ROI แล้ว OCR ใหม่ทุกครั้งที่ ROI เปลี่ยน) พร้อมเงื่อนไขชัดเจนจากผู้ใช้: ต้องเป็น suggestion เท่านั้น (ห้าม auto-save), confidence policy 2 ระดับ (preview 0.6 / stable 0.85 + ค่าตรงกัน 3 ครั้งติด), Camera Mode ยังคงใช้ ROI คงที่แต่ต้องออกแบบ API ให้รองรับการปรับ ROI ในอนาคต, และห้ามแตะ `saveOfflineReading()`/reading workflow/billing/duplicate checking
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| Live OCR เป็น **suggestion เท่านั้น** — `useLiveOcr` ไม่เคยเรียก `setCurrentValueInput`/`saveOfflineReading` เอง มีแค่ `page.tsx` ที่ตัดสินใจ prefill (`applyLiveResultIfStable`) เมื่อ status เป็น `"stable"` เท่านั้น ผู้ใช้ยังต้องตรวจ/แก้ไข/กดยืนยันผ่านการ์ดยืนยันเดิมทุกครั้ง | ตรงตามคำสั่งชัดเจน "ห้ามบันทึกค่าอัตโนมัติจาก live OCR โดยไม่ผ่าน confirmation" — แยก concern ชัดเจนระหว่าง "แสดงคำแนะนำ" กับ "บันทึกค่า" |
+| Confidence 2 ชั้น: **preview** ใช้ `ocrValidation.ts` เดิม (confidence ≥ 0.6 + รูปแบบตัวเลข/ความยาว) เป็นเกณฑ์ว่าจะแสดงค่าเป็น candidate เลยหรือไม่ (status `unstable`), **stable** ใช้ `ocrStability.ts` ใหม่ (ต้องตรงกัน 3 ครั้งติด **และ** ทุกครั้งในนั้น confidence ≥ 0.85) ก่อนขึ้น ✓ | ตรงตาม policy ที่ผู้ใช้ระบุมาตรงตัวเป๊ะ — แยกไฟล์ตามความรับผิดชอบ (validate ครั้งเดียว vs. ติดตามความนิ่งข้ามเวลา) ทำให้ทดสอบแยกส่วนได้ง่าย |
+| Camera Mode: `MeterCamera` เพิ่ม prop `initialRegion`/`allowAdjust` (default `DEFAULT_OCR_REGION`/`false`) — เฟสนี้ ROI ยังคงที่ ใช้แค่ `initialRegion` ส่งต่อให้ overlay/`useLiveOcr`, `allowAdjust=true` ยังไม่ทำอะไร (แค่ dev-only `console.warn`) | ตรงตามคำสั่ง "Phase นี้ใช้ DEFAULT_OCR_REGION แต่ให้ออกแบบ API รองรับ future adjustable ROI" — เพิ่ม prop ไว้ล่วงหน้าโดยไม่ implement drag UI จริงในเฟสนี้ ป้องกัน breaking change ตอนเพิ่มจริงในอนาคต |
+| Upload Mode: เพิ่ม `MeterImageEditor.tsx` ใหม่ทั้งหมด (zoom ผ่านปุ่ม +/−, pan ด้วยการลากภาพ, ROI ลาก/ปรับขนาดได้ 4 มุม) — เรขาคณิตทั้งหมดแยกไว้ที่ `lib/image/roiEditor.ts` (pure function, มี unit test) ไม่ผูกกับ DOM | ตรงตามคำสั่ง "เห็น OCR result realtime, confidence, สถานะ stable/unstable" — แยก geometry ออกจาก component ทำให้ทดสอบ pan/zoom/resize math ได้โดยไม่ต้องพึ่ง canvas/DOM ใน vitest |
+| `useLiveOcr` เขียนเป็น hook กลางใช้ร่วมกันทั้ง 2 mode (รับ `captureFrame`/`region`/`{intervalMs, enabled, mode}`) แทนที่จะแยก logic คนละชุด | ลดโค้ดซ้ำ — pipeline crop→preprocess→recognize→validate→stability เหมือนกันทุกจุด ต่างกันแค่ frame source (video vs. static image) |
+| Event log สำหรับ debug (`{timestamp, mode, roi, value, confidence}`) ใช้ `console.group`/`console.log` ห่อด้วย `if (process.env.NODE_ENV === "development")` ใน `useLiveOcr`'s tick — ไม่มี state/storage ใดๆ เก็บ log นี้ | ตรงตามคำสั่ง "เฉพาะ development mode ไม่ persist production" — gate ด้วย `NODE_ENV` เท่ากับไม่มีผลใดๆ ในโปรดักชันเลย (เข้ากับ global CLAUDE.md logging convention ของโปรเจกต์นี้ด้วย) |
+| Ref writes ทั้งหมดใน `useLiveOcr`/`MeterImageEditor` ย้ายเข้า `useEffect` แทนการ assign ตรงระหว่าง render (`baseScaleRef` ถูกแทนด้วยตัวแปร derived ธรรมดาแทน) | `eslint-plugin-react-hooks` (v7) rule `react-hooks/refs` ในโปรเจกต์นี้ error ทันทีถ้าอ่าน/เขียน ref ระหว่าง render — พบระหว่าง `npm run lint` แก้ตามที่ rule กำหนด |
+
+**ผลกระทบต่อ workflow การบันทึก**: ไม่มี — `saveOfflineReading()`, duplicate checking, `readingWorkflow.ts`, billing calculation ไม่ถูกแก้แม้แต่บรรทัดเดียว ภาพที่ส่งเข้า `saveOfflineReading()` ยังเป็นภาพต้นฉบับเต็มภาพเสมอ (ไม่ใช่ภาพที่ซูม/แพนตอน edit) ทุก crop ที่เกิดจาก live loop (ทั้งจาก video frame และจาก editor) ยังคงเป็น transient in-memory เหมือนเดิมทุกจุด ไม่มีจุดใด persist เพิ่มจากที่ระบุไว้ในหัวข้อก่อนหน้า
+
+**ไฟล์ใหม่**: `lib/ocr/ocrStability.ts` (+test), `lib/ocr/useLiveOcr.ts`, `lib/image/roiEditor.ts` (+test), `components/meter/MeterLiveReadingBadge.tsx`, `components/meter/MeterImageEditor.tsx`
+**ไฟล์ที่แก้**: `components/meter/MeterCamera.tsx` (เพิ่ม live badge + `initialRegion`/`allowAdjust` + แยก `onFileSelected` ออกจาก `onCapture`), `checker/reading/page.tsx` (เพิ่ม `pendingUploadFile`/`ocrRegion` state + branch render 3 ทาง + `applyLiveResultIfStable`)
+
+**ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (148 tests, เพิ่ม `ocrStability.test.ts` + `roiEditor.test.ts`), `npm run build` ผ่านทั้งหมด — **ยังไม่ได้ทดสอบจริงบนอุปกรณ์จริง** (ไม่มี headless browser/Playwright ในสภาพแวดล้อมนี้) โดยเฉพาะ: ความลื่นไหลของ live OCR บนมือถือจริงที่ interval 800ms, ท่าทาง pan/pinch บนหน้าจอสัมผัสจริง (ตอนนี้รองรับ pointer events แบบทั่วไป ยังไม่มี multi-touch pinch-zoom จริง — ใช้ปุ่ม +/− แทน), และค่าที่เหมาะสมของ `MIN_CONFIDENCE`/`STABLE_CONFIDENCE`/`intervalMs` กับภาพมิเตอร์จริง
+
+**สถานะ**: ✅ Implementation เสร็จ, รอทดสอบบนอุปกรณ์จริงเพื่อ tune ค่าประสิทธิภาพ/threshold ก่อนใช้งานจริง — ยังไม่มี pinch-zoom multi-touch จริง (ใช้ปุ่ม +/− ชั่วคราว) หากต้องการเพิ่มควรทำเป็นงานถัดไปแยกต่างหาก
+
+---
+
+## ✅ Field Calibration — Testing Support tooling เท่านั้น ไม่เพิ่ม feature ใหญ่ (2026-09-14)
+
+**บริบท**: หลัง Real-time OCR Preview implement เสร็จ ผู้ใช้สั่งเข้าสู่ phase "Field Calibration" — ของเดิมยัง**ไม่เคยทดสอบบนอุปกรณ์จริง**เลย (บันทึกไว้เป็น gap ในหัวข้อก่อนหน้าซ้ำหลายครั้ง) จึงขอเครื่องมือ debug/testing 4 อย่างเพื่อให้ไปทดสอบ/tune กับมิเตอร์จริงได้ โดยกำชับชัดเจนว่า "อย่าเพิ่ม feature ใหญ่" และห้ามแตะ `saveOfflineReading()`/reading workflow/billing/duplicate logic
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| **OCR Debug Panel** (`MeterOcrDebugPanel.tsx`) render เฉพาะตอน `process.env.NODE_ENV === "development"` ที่ระดับ `page.tsx` — component เองไม่ self-gate | ให้ page-level ตัดสินใจ render/ไม่ render ชัดเจนจุดเดียว ตรงตามคำสั่ง "(development only)" |
+| `useLiveOcr` เปลี่ยน return value จาก `LiveOcrState` เป็น `{state, debug}` — `debug` เป็น `OcrDebugSnapshot \| null` ที่มีแค่ตอน dev เท่านั้น (`null` เสมอนอก dev) | เก็บ object URL ของ 3 ภาพ (original/ROI/preprocessed) ไว้ใน state เดียวกับ pipeline ที่รันอยู่แล้ว แทนที่จะสร้าง hook คู่ขนานที่รัน pipeline ซ้ำ — ประหยัด CPU และรับประกันว่าภาพที่เห็นตรงกับค่าที่อ่านได้จริงเป๊ะ |
+| Object URL (`URL.createObjectURL`) ของ debug snapshot ถูก revoke ทุกครั้งก่อนสร้างชุดใหม่ (เก็บ ref ของชุดก่อนหน้าไว้ revoke) และ revoke ทั้งหมดตอน effect cleanup/unmount | ป้องกัน memory leak จากการเปิดกล้องค้างไว้นานๆ ระหว่าง calibration (interval 800ms สร้าง URL ใหม่ตลอด ถ้าไม่ revoke จะสะสมไม่จำกัด) |
+| **OCR Metrics** (`ocrMetrics.ts`) เป็น module-level array ธรรมดา (ไม่ใช่ React state/Context) จำกัดที่ 200 รายการล่าสุด, บันทึกจาก `useLiveOcr` เฉพาะ dev mode เดียวกับ debug panel | ตรงตาม "เก็บเฉพาะ runtime memory" ตรงตัว — ไม่มี localStorage/IndexedDB/server involved เลย รีเซ็ตทุกครั้งที่ reload หน้า ผูก gate เดียวกับ debug panel เพื่อไม่ให้มี behavior 2 ชุดที่ต้องจำแยกกัน |
+| **Camera Quality Detector** (`cameraQuality.ts` + `useCameraQuality.ts`) แยก hook/pipeline ออกจาก `useLiveOcr` โดยสิ้นเชิง รันบนภาพ downscale เหลือ 160x120 ที่ interval 500ms (เร็วกว่า/เบากว่า OCR loop) ใช้ brightness เฉลี่ย + Laplacian variance (blur score) | เป็นคนละ concern จาก OCR (ไม่ต้องพึ่ง Tesseract) และต้องตอบสนองไวกว่าเพื่อเตือนผู้ใช้ **ก่อน**กดถ่าย ไม่ใช่หลังถ่ายแล้ว — Laplacian variance เป็นเทคนิคมาตรฐานสำหรับวัดความเบลอแบบไม่ต้องพึ่ง ML model |
+| ค่าคงที่ `DARK_THRESHOLD=60`, `BRIGHT_THRESHOLD=200`, `BLUR_THRESHOLD=50` เป็นค่าตั้งต้นที่ต้อง tune จริงระหว่าง field calibration (export เป็น named constants ไม่ hardcode ในฟังก์ชัน) | ยังไม่เคยทดสอบกับกล้องมือถือจริง — ตั้งชื่อ/export ชัดเจนเพื่อให้แก้ค่าได้ง่ายตอนไปทดสอบภาคสนามจริง โดยไม่ต้องรื้อโค้ด |
+| **Pinch zoom** สำหรับ `MeterImageEditor` เพิ่มด้วย native Pointer Events (ไม่เพิ่ม library ใหม่) — track pointer หลายตัวผ่าน `Map` ใน ref, คำนวณ zoom ratio จากระยะห่างนิ้ว + คง midpoint นิ้วไว้ที่จุดเดิมบนจอระหว่างซูม (`distanceBetween`/`midpointOf` ใน `roiEditor.ts`, pure function มี unit test) | ตรงตามคำขอโดยไม่เพิ่ม dependency ใหม่ — ใช้ pattern เดียวกับ pointer-capture ที่มีอยู่แล้วสำหรับ pan/resize ROI ปุ่ม +/− เดิมยังคงอยู่เป็นทางเลือกสำรอง |
+| ปล่อยนิ้วระหว่าง pinch (เหลือ < 2 จุดสัมผัส) จะเคลียร์ drag state ทันที ไม่ fallback เป็น single-finger pan อัตโนมัติ | ยอมรับ simplification สำหรับ MVP calibration tool ตามที่บันทึกไว้ — ผู้ใช้ต้องเริ่ม gesture ใหม่ ไม่ใช่ blocking issue สำหรับงาน tune ค่า |
+
+**ผลกระทบต่อ workflow การบันทึก**: ไม่มี — `saveOfflineReading()`, `readingWorkflow.ts`, billing, duplicate checking ไม่ถูกแก้แม้แต่บรรทัดเดียว เครื่องมือทั้ง 4 อย่างเป็น debug/testing support ล้วนๆ ไม่มีจุดใดเขียนค่ากลับเข้า workflow การบันทึกเลย
+
+**ไฟล์ใหม่**: `lib/ocr/ocrMetrics.ts`(+test), `lib/image/cameraQuality.ts`(+test), `lib/image/useCameraQuality.ts`, `components/meter/MeterOcrDebugPanel.tsx`, `components/meter/MeterCameraQualityWarning.tsx`
+**ไฟล์ที่แก้**: `lib/ocr/useLiveOcr.ts` (return `{state, debug}` + timing + metrics recording), `lib/image/roiEditor.ts` (+`distanceBetween`/`midpointOf`, +test), `components/meter/MeterCamera.tsx` (quality warning + debug bubbling), `components/meter/MeterImageEditor.tsx` (pinch zoom + debug bubbling), `components/meter/MeterLiveReadingBadge.tsx` (ตัด positioning ออกให้ parent ควบคุมแทน เพราะตอนนี้ซ้อนกับ quality warning ในคอนเทนเนอร์เดียวกัน), `checker/reading/page.tsx` (เพิ่ม `debugSnapshot` state + render `MeterOcrDebugPanel` เฉพาะ dev)
+
+**ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (159 tests, เพิ่ม `ocrMetrics.test.ts` + `cameraQuality.test.ts` + เทสใหม่ใน `roiEditor.test.ts`), `npm run build` ผ่านทั้งหมด — **ยังไม่ได้ทดสอบบนอุปกรณ์จริง** (ข้อจำกัดเดิม ไม่มี headless browser ในสภาพแวดล้อมนี้) โดยเฉพาะ: ตัวเลข threshold ทั้งหมด (brightness/blur/confidence/interval) ยังเป็นค่าประมาณ ยังไม่ผ่านการ calibrate จริง, ท่าทาง pinch จริงบนจอสัมผัส, และ debug panel ไม่เคยเห็นภาพจริงว่า preprocess แล้วหน้าตาเป็นอย่างไร
+
+**สถานะ**: ✅ Implementation เสร็จ ตาม scope "testing support" ที่ขอเป๊ะ ไม่มี business logic ใหม่ — **รอ confirm ก่อน merge** ตามที่ผู้ใช้ระบุ
+
+---
+
+## ✅ Confirm merge — รวม threshold เป็น config เดียว + เอกสาร calibration (2026-09-14)
+
+**บริบท**: ผู้ใช้ confirm merge งาน Field Calibration ด้านบน พร้อมสั่งเพิ่ม 3 อย่างก่อน merge จริง: (1) comment ชัดเจนว่า `ocrMetrics.ts` เป็น dev-only/ไม่ persist/ไม่ใช่ application state (2) รวม threshold ทั้งหมดเป็น configuration เดียว (3) เพิ่ม `docs/meter-calibration.md` สำหรับบันทึกผลทดสอบ Phase ถัดไป (Real Device Calibration)
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| สร้าง `lib/calibration/config.ts` เป็น single source of truth ของ 5 threshold: `ocr.previewConfidence`, `ocr.stableConfidence`, `ocr.stabilityCount`, `ocr.liveIntervalMs`, `cameraQuality.{checkIntervalMs,darkThreshold,brightThreshold,blurThreshold}` — ย้ายจากค่าคงที่กระจายอยู่ 4 ไฟล์ (`ocrValidation.ts`, `ocrStability.ts`, `useLiveOcr.ts`, `cameraQuality.ts`, `useCameraQuality.ts`) มารวมที่เดียว | ตรงตามคำสั่ง "บันทึก threshold ทั้งหมดเป็น configuration" — ทำให้ Phase Real Device Calibration แก้ค่าได้จากไฟล์เดียวโดยไม่ต้องไล่หาทีละไฟล์ |
+| **ไม่ย้าย** `MIN_DIGITS`/`MAX_DIGITS` (ความยาวตัวเลขที่ยอมรับ) เข้า config — ยังคงเป็น local constant ใน `ocrValidation.ts` | ผู้ใช้ระบุ 5 รายการชัดเจน (OCR confidence, stability count, interval, brightness threshold, blur threshold) ไม่มีความยาวตัวเลขอยู่ในนั้น — นี่คือกฎรูปแบบข้อมูล (format rule) ไม่ใช่ threshold ที่ปรับตาม hardware/สภาพแวดล้อม จึงไม่เข้าเกณฑ์เดียวกัน |
+| เพิ่ม `lib/calibration/config.test.ts` ตรวจ sanity ของค่า default (confidence อยู่ใน 0-1, stable ≥ preview, dark < bright, interval > 0) | กัน typo/ค่าที่กลับกันโดยไม่ตั้งใจตอนแก้ config ระหว่าง calibrate จริงในอนาคต — เป็น regression guard ราคาถูกสำหรับไฟล์ที่จะถูกแก้บ่อยที่สุดใน Phase ถัดไป |
+| `ocrMetrics.ts` เพิ่ม comment block ชัดเจนระดับหัวไฟล์ (ไม่ใช่แค่ inline) ระบุ 3 ข้อแยกกัน: development-only (ผูกกับ gate เดียวกับ debug panel), not persisted (ไม่มี localStorage/IndexedDB/server ใดๆ), not application state (ไม่มีจุดใดใน reading workflow อ่านค่าจากไฟล์นี้) | ตรงตามคำสั่งตรงตัว — เขียนแยก 3 หัวข้อชัดเจนแทนประโยคเดียวรวมกัน เพื่อให้คนอ่านโค้ดในอนาคตเข้าใจขอบเขตได้ทันทีโดยไม่ต้องเดา |
+| `docs/meter-calibration.md` ใหม่ — มี snapshot ค่าปัจจุบันจาก config.ts (พร้อมคำเตือนว่าเป็น snapshot ไม่ใช่ source of truth), วิธีเก็บข้อมูลผ่าน debug panel, และ template สำหรับบันทึกผลแต่ละ session แบบ append-only (ห้ามลบของเก่า) | ตรงตามคำขอ "เก็บผลทดสอบจากอุปกรณ์จริงใน Phase ถัดไป" — ออกแบบเป็น log สะสมไม่ใช่ single-value เพื่อย้อนดูประวัติการปรับค่าได้ |
+
+**ผลกระทบต่อ workflow การบันทึก**: ไม่มี — ยืนยันซ้ำอีกครั้งตามที่ผู้ใช้ขอ: `saveOfflineReading()`, `readingWorkflow.ts`, billing, duplicate checking ไม่ถูกแก้ไขเลยตลอดทั้ง Field Calibration phase (ตรวจด้วย `grep` ก่อน merge ทุกครั้ง)
+
+**ไฟล์ใหม่**: `lib/calibration/config.ts`(+test), `docs/meter-calibration.md`
+**ไฟล์ที่แก้**: `ocrValidation.ts`, `ocrStability.ts`, `useLiveOcr.ts`, `cameraQuality.ts`, `useCameraQuality.ts` (ทั้งหมดอ่านค่าจาก `DEFAULT_CALIBRATION_CONFIG` แทนค่าคงที่ในไฟล์ตัวเอง), `ocrMetrics.ts` (comment block)
+
+**ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (164 tests, เพิ่ม `config.test.ts`), `npm run build` ผ่านทั้งหมด — grep ยืนยันไม่มี reference เหลือค้างของค่าคงที่เดิม (`DARK_THRESHOLD`/`STABLE_CONFIDENCE`/ฯลฯ) หลังย้าย
+
+**สถานะ**: ✅ Merged ตามที่ confirm — เตรียมเข้า Phase **Real Device Calibration** ถัดไป (บันทึกผลลง `docs/meter-calibration.md`, แก้ค่าที่ `lib/calibration/config.ts` จุดเดียว)

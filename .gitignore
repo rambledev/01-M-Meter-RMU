@@ -46,6 +46,10 @@ next-env.d.ts
 prisma/*.db
 prisma/migrations/dev/
 
+# manifest of reading ids created by prisma/seedReadings.cjs, consumed by
+# prisma/deleteSeedReadings.cjs — a run-specific artifact, not source
+prisma/seedReadings.output.json
+
 # user-uploaded meter photos (runtime data, not source — created by the sync
 # API at src/app/api/readings/sync/route.ts)
 /public/upload/

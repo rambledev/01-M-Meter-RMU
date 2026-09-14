@@ -8,8 +8,13 @@
 // after that first one works offline. There is no bundled/self-hosted copy
 // of those assets in this repo yet — see docs/ocr-strategy.md for why that
 // was intentionally deferred instead of blocking this phase.
+//
+// Meter ROI Guide refactor: this now receives an already-cropped and
+// preprocessed image (see lib/image/meterCrop.ts + meterPreprocess.ts) —
+// it no longer takes a region/rectangle, since the caller has already
+// isolated the digits before this runs (decision-log.md, "Meter ROI Guide").
 
-import { DEFAULT_OCR_REGION, regionToRectangle, type OcrRegion } from "./ocrRegion";
+import type { OcrRecognitionResult } from "./ocrValidation";
 
 let workerPromise: Promise<import("tesseract.js").Worker> | null = null;
 
@@ -19,7 +24,9 @@ async function getWorker() {
       const { createWorker } = await import("tesseract.js");
       const worker = await createWorker("eng");
       // Meter displays are digits + a decimal point — restricting the
-      // character set measurably improves accuracy over unrestricted text.
+      // character set measurably improves accuracy over unrestricted text,
+      // and keeps stray label text (e.g. "KILOWATT-HOUR METER", "220V") out
+      // of the result even if it leaks into the cropped frame.
       await worker.setParameters({
         tessedit_char_whitelist: "0123456789.",
       });
@@ -29,23 +36,10 @@ async function getWorker() {
   return workerPromise;
 }
 
-// Reads only the given region of the ORIGINAL image — the region is passed
-// to Tesseract as a `rectangle` alongside the full image; Tesseract crops
-// internally in WASM memory. This code never builds or persists a separate
-// cropped image (ocr-strategy.md §4: "ไม่จัดเก็บ OCR Crop Image แบบถาวร").
 export async function recognizeMeterValue(
-  imageBlob: Blob,
-  region: OcrRegion = DEFAULT_OCR_REGION,
-): Promise<string> {
-  const bitmap = await createImageBitmap(imageBlob);
-  let rectangle;
-  try {
-    rectangle = regionToRectangle(region, bitmap.width, bitmap.height);
-  } finally {
-    bitmap.close();
-  }
-
+  preprocessedImageBlob: Blob,
+): Promise<OcrRecognitionResult> {
   const worker = await getWorker();
-  const { data } = await worker.recognize(imageBlob, { rectangle });
-  return data.text.trim();
+  const { data } = await worker.recognize(preprocessedImageBlob);
+  return { value: data.text.trim(), confidence: data.confidence / 100 };
 }

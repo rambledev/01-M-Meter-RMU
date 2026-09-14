@@ -6,6 +6,15 @@
 // of all 12 Thai month names instead. Value/onChange stay "YYYY-MM"
 // (Gregorian) so every existing caller (currentMonthValue/isFutureMonth/
 // handleMonthChange/etc.) keeps working unchanged.
+//
+// Always shows all 12 months for whichever year is selected, in every
+// caller (2026-09-07 — previously some callers passed a `max` to hide
+// months later than the current one; the user asked for every month
+// picker, everywhere, to always list the full 12, defaulting to the
+// current month but never restricting what can be picked). Anywhere a
+// future month is genuinely invalid to select (e.g. entering a new meter
+// reading), that is enforced separately by the caller's own business-rule
+// check (isFutureMonth), not by hiding options here.
 const THAI_MONTHS = Array.from({ length: 12 }, (_, i) =>
   new Intl.DateTimeFormat("th-TH", { month: "long" }).format(new Date(2000, i, 1)),
 );
@@ -26,7 +35,6 @@ export default function MonthYearSelect({
   id,
   value,
   onChange,
-  max,
   yearsBack = 5,
   wrapperClassName = "flex gap-2",
   selectClassName = DEFAULT_SELECT_CLASS,
@@ -34,26 +42,20 @@ export default function MonthYearSelect({
   id?: string;
   value: string; // "YYYY-MM"
   onChange: (value: string) => void;
-  max?: string; // "YYYY-MM" — latest selectable month, if any
   yearsBack?: number;
   wrapperClassName?: string;
   selectClassName?: string;
 }) {
   const { year, month } = parseMonthValue(value);
-  const maxParsed = max ? parseMonthValue(max) : null;
-  const latestYear = maxParsed?.year ?? new Date().getFullYear();
+  const latestYear = new Date().getFullYear();
   const years = Array.from({ length: yearsBack + 1 }, (_, i) => latestYear - i);
-
-  const monthOptionCount = maxParsed && year === maxParsed.year ? maxParsed.month : 12;
 
   function handleMonthChange(nextMonth: number) {
     onChange(buildMonthValue(year, nextMonth));
   }
 
   function handleYearChange(nextYear: number) {
-    const cappedMonth =
-      maxParsed && nextYear === maxParsed.year ? Math.min(month, maxParsed.month) : month;
-    onChange(buildMonthValue(nextYear, cappedMonth));
+    onChange(buildMonthValue(nextYear, month));
   }
 
   return (
@@ -64,7 +66,7 @@ export default function MonthYearSelect({
         onChange={(e) => handleMonthChange(Number(e.target.value))}
         className={selectClassName}
       >
-        {THAI_MONTHS.slice(0, monthOptionCount).map((name, i) => (
+        {THAI_MONTHS.map((name, i) => (
           <option key={i + 1} value={i + 1}>
             {name}
           </option>

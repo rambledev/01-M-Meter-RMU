@@ -1,10 +1,26 @@
 "use client";
 
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
-import { DEFAULT_OCR_REGION } from "@/lib/ocr/ocrRegion";
+import { useCameraQuality } from "@/lib/image/useCameraQuality";
+import { DEFAULT_OCR_REGION, type OcrRegion } from "@/lib/ocr/ocrRegion";
+import { useLiveOcr, type LiveOcrState, type OcrDebugSnapshot } from "@/lib/ocr/useLiveOcr";
+import MeterCameraQualityWarning from "./MeterCameraQualityWarning";
+import MeterCaptureButton from "./MeterCaptureButton";
+import MeterGuideOverlay from "./MeterGuideOverlay";
+import MeterLiveReadingBadge from "./MeterLiveReadingBadge";
 
-interface CameraCaptureProps {
-  onCapture: (blob: Blob) => void;
+interface MeterCameraProps {
+  onCapture: (blob: Blob, liveResult: LiveOcrState) => void;
+  onFileSelected: (file: Blob) => void;
+  // Camera Mode uses a fixed region for now (Meter ROI Guide) — these two
+  // props exist so a future drag-to-adjust camera ROI can land without
+  // changing this component's public API. `allowAdjust` has no effect yet.
+  initialRegion?: OcrRegion;
+  allowAdjust?: boolean;
+  // Field Calibration debug panel (development only) — see
+  // MeterOcrDebugPanel.tsx. Omit in production usage; harmless if passed
+  // since the snapshot itself is always null outside development.
+  onDebugSnapshot?: (snapshot: OcrDebugSnapshot | null) => void;
 }
 
 type Phase = "idle" | "starting" | "streaming" | "error";
@@ -21,15 +37,31 @@ function cameraErrorMessage(err: unknown): string {
   return "เปิดกล้องไม่สำเร็จ กรุณาเลือกภาพจากเครื่องแทน";
 }
 
-// Simple, single-purpose camera UI (item 1 of the Phase 4 spec) — no
-// advanced controls (zoom, flash, multi-camera picker). Falls back to a
-// plain file input whenever getUserMedia is unsupported, denied, or fails,
-// so the rest of the reading workflow never gets stuck.
-export default function CameraCapture({ onCapture }: CameraCaptureProps) {
+// Camera lifecycle (was CameraCapture.tsx) plus the Meter ROI Guide overlay
+// and a real-time OCR suggestion (useLiveOcr) that samples the live video
+// while streaming — purely a live preview, never a save; the shutter still
+// captures the full frame the same way it always did. Falls back to a plain
+// file input whenever getUserMedia is unsupported, denied, or fails.
+export default function MeterCamera({
+  onCapture,
+  onFileSelected,
+  initialRegion = DEFAULT_OCR_REGION,
+  allowAdjust = false,
+  onDebugSnapshot,
+}: MeterCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (allowAdjust && process.env.NODE_ENV === "development") {
+      console.warn(
+        "[MeterCamera] allowAdjust=true has no effect yet — Camera Mode still uses a fixed region.",
+      );
+    }
+  }, [allowAdjust]);
 
   function stopStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -39,6 +71,34 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   useEffect(() => {
     return () => stopStream();
   }, []);
+
+  function captureLiveFrame(): Promise<Blob | null> {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0) return Promise.resolve(null);
+    if (!liveCanvasRef.current) {
+      liveCanvasRef.current = document.createElement("canvas");
+    }
+    const canvas = liveCanvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return Promise.resolve(null);
+    ctx.drawImage(video, 0, 0);
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.85);
+    });
+  }
+
+  const { state: liveState, debug } = useLiveOcr(captureLiveFrame, initialRegion, {
+    enabled: phase === "streaming",
+    mode: "camera",
+  });
+
+  useEffect(() => {
+    onDebugSnapshot?.(debug);
+  }, [debug, onDebugSnapshot]);
+
+  const quality = useCameraQuality(videoRef, { enabled: phase === "streaming" });
 
   async function startCamera() {
     setErrorMessage(null);
@@ -81,7 +141,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     ctx.drawImage(video, 0, 0);
     canvas.toBlob(
       (blob) => {
-        if (blob) onCapture(blob);
+        if (blob) onCapture(blob, liveState);
       },
       "image/jpeg",
       0.9,
@@ -92,7 +152,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
   function handleFileSelected(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) onCapture(file);
+    if (file) onFileSelected(file);
     e.target.value = "";
   }
 
@@ -115,22 +175,12 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       {phase === "streaming" && (
         <div className="relative overflow-hidden rounded-xl bg-black">
           <video ref={videoRef} className="w-full" playsInline muted />
-          <div
-            className="pointer-events-none absolute border-4 border-yellow-400"
-            style={{
-              left: `${DEFAULT_OCR_REGION.x * 100}%`,
-              top: `${DEFAULT_OCR_REGION.y * 100}%`,
-              width: `${DEFAULT_OCR_REGION.width * 100}%`,
-              height: `${DEFAULT_OCR_REGION.height * 100}%`,
-            }}
-          />
-          <button
-            type="button"
-            onClick={capture}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white px-6 py-3 font-bold text-black shadow"
-          >
-            ถ่าย
-          </button>
+          <MeterGuideOverlay region={initialRegion} />
+          <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-3">
+            <MeterLiveReadingBadge state={liveState} />
+            <MeterCameraQualityWarning quality={quality} />
+          </div>
+          <MeterCaptureButton onCapture={capture} />
         </div>
       )}
 

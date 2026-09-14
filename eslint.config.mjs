@@ -12,8 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Standalone Node CJS script, not part of the Next.js app.
+    // Standalone Node CJS scripts, not part of the Next.js app.
     "prisma/seed.cjs",
+    "prisma/seedReadings.cjs",
+    "prisma/deleteSeedReadings.cjs",
   ]),
 ]);
 

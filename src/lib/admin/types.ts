@@ -33,12 +33,20 @@ export interface ZoneRef {
   name: string;
 }
 
+export interface RoomRef {
+  id: string;
+  name: string;
+  zoneName: string;
+}
+
 export interface UserDTO {
   id: string;
   name: string;
-  username: string | null;
+  username: string | null; // มีความหมายกับ role ADMIN/METER_READER เท่านั้น
+  email: string | null; // มีความหมายกับ role RESIDENT เท่านั้น (login ด้วย Google)
   role: RoleValue;
-  responsibleZones: ZoneRef[];
+  responsibleZones: ZoneRef[]; // มีความหมายกับ role METER_READER เท่านั้น
+  residentRoom: RoomRef | null; // มีความหมายกับ role RESIDENT เท่านั้น
   readingCount: number;
 }
 

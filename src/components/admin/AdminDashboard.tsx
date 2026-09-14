@@ -125,7 +125,7 @@ function MissingReadingsPanel() {
       <h3 className="text-base font-semibold text-emerald-800 dark:text-emerald-400">ห้องที่ยังไม่จดมิเตอร์ประจำเดือน</h3>
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <MonthYearSelect value={monthValue} onChange={setMonthValue} max={currentMonthValue()} />
+        <MonthYearSelect value={monthValue} onChange={setMonthValue} />
         <select
           value={zoneFilter}
           onChange={(e) => setZoneFilter(e.target.value)}

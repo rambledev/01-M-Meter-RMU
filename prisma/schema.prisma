@@ -37,10 +37,11 @@ model Zone {
 model Room {
   id           String   @id @default(cuid())
   name         String // เลขที่บ้านพัก/ห้อง
-  residentName String? // ชื่อ-สกุลผู้พักอาศัย (ใช้ตอน export คอลัมน์ "ชื่อ-สกุล")
+  residentName String? // ชื่อ-สกุลผู้พักอาศัย (ใช้ตอน export คอลัมน์ "ชื่อ-สกุล") — free text, not linked to a User account
   zoneId       String
   zone         Zone     @relation(fields: [zoneId], references: [id])
   meters       Meter[]
+  residents    User[]   @relation("ResidentRoom") // บัญชี role RESIDENT ที่ผูกกับห้องนี้ (2026-09-09) — ต่างจาก residentName ข้างบน ซึ่งเป็นแค่ข้อความ ไม่ใช่บัญชีผู้ใช้งานจริง
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -87,10 +88,13 @@ model ReadingImage {
 model User {
   id               String    @id @default(cuid())
   name             String
-  username         String?   @unique // nullable: existing rows predate this field (2026-09-04) — required at the application layer for new users
+  username         String?   @unique // nullable: มีความหมายกับ role ADMIN/METER_READER เท่านั้น (login ด้วย username/password)
   passwordHash     String? // salted scrypt hash (src/lib/admin/password.ts) — never plaintext, never returned by any API
+  email            String?   @unique // nullable: มีความหมายกับ role RESIDENT เท่านั้น (2026-09-09) — login ด้วย Google Sign-In โดเมน @rmu.ac.th เท่านั้น ไม่มี passwordHash
   role             Role
-  responsibleZones Zone[]    @relation("UserResponsibleZones")
+  responsibleZones Zone[]    @relation("UserResponsibleZones") // มีความหมายกับ role METER_READER เท่านั้น
+  residentRoomId   String? // มีความหมายกับ role RESIDENT เท่านั้น (2026-09-09) — ห้องเดียวที่มองเห็นข้อมูลได้ ไม่ใช่ many-to-many แบบโซนของผู้จดมิเตอร์ ; อนุญาตหลาย User ต่อ Room เดียวกันได้ (เพื่อนร่วมห้อง) จึงไม่ unique
+  residentRoom     Room?     @relation("ResidentRoom", fields: [residentRoomId], references: [id])
   readings         Reading[]
   createdAt        DateTime  @default(now())
 }

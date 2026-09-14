@@ -21,16 +21,18 @@ export interface PixelRectangle {
   height: number;
 }
 
-// Converts the fractional region into the pixel rectangle Tesseract expects
-// for a given image size. Pure math only — no image data touched here, so
-// nothing crop-shaped is ever created by this function.
+// Converts the fractional region into a pixel rectangle for a given image
+// size. Pure math only — no image data touched here. Used by
+// lib/image/meterCrop.ts to crop the region out of the original photo
+// before OCR (Meter ROI Guide refactor — see decision-log.md for why this
+// crop step now exists in-memory instead of being left to Tesseract).
 //
-// Clamped to stay within the image bounds with at least a 1x1 size: Tesseract
-// (Leptonica, under the hood) aborts the whole WASM worker on an out-of-bounds
-// or zero-size rectangle instead of throwing a catchable JS error, which was
-// observed against a degenerate (near-zero-pixel) test image during Phase 4
-// browser testing. Real camera photos are always far larger than the region,
-// so this only ever matters for pathological inputs.
+// Clamped to stay within the image bounds with at least a 1x1 size:
+// Tesseract (Leptonica, under the hood) used to abort the whole WASM worker
+// on an out-of-bounds or zero-size rectangle instead of throwing a
+// catchable JS error, observed against a degenerate (near-zero-pixel) test
+// image during Phase 4 browser testing — the same clamp still protects
+// meterCrop.ts against a degenerate ROI on a tiny/corrupt photo.
 export function regionToRectangle(
   region: OcrRegion,
   imageWidth: number,

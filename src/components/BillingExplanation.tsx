@@ -9,7 +9,13 @@ function tierLabel(tier: BillingConfig["tiers"][number]): string {
   return `${range} หน่วย`;
 }
 
-export default function BillingExplanation({ config }: { config: BillingConfig }) {
+export default function BillingExplanation({
+  config,
+  label = "อธิบายการคิดค่าไฟ",
+}: {
+  config: BillingConfig;
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const explanation = buildBillingExplanation(config);
 
@@ -20,7 +26,7 @@ export default function BillingExplanation({ config }: { config: BillingConfig }
         onClick={() => setOpen((v) => !v)}
         className="self-start rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold dark:border-zinc-700"
       >
-        {open ? "ซ่อนคำอธิบาย" : "อธิบายการคิดค่าไฟ"}
+        {open ? "ซ่อนคำอธิบาย" : label}
       </button>
 
       {open && (

@@ -110,10 +110,13 @@ model Reading {
 model User {
   id               String    @id @default(cuid())
   name             String
-  username         String?   @unique // nullable: existing rows predate this field (2026-09-04 admin UI) — required at the application layer for new users
+  username         String?   @unique // nullable: มีความหมายกับ role ADMIN/METER_READER เท่านั้น (login ด้วย username/password) — existing rows predate this field (2026-09-04 admin UI)
   passwordHash     String? // salted scrypt hash (src/lib/admin/password.ts) — never plaintext, never returned by any API
+  email            String?   @unique // nullable: มีความหมายกับ role RESIDENT เท่านั้น (2026-09-09) — login ด้วย Google Sign-In โดเมน @rmu.ac.th เท่านั้น ไม่มี passwordHash
   role             Role
-  responsibleZones Zone[]    @relation("UserResponsibleZones") // many-to-many, admin UI "โซนที่รับผิดชอบ" (2026-09-04)
+  responsibleZones Zone[]    @relation("UserResponsibleZones") // many-to-many, admin UI "โซนที่รับผิดชอบ" (2026-09-04) — มีความหมายกับ role METER_READER เท่านั้น
+  residentRoomId   String? // มีความหมายกับ role RESIDENT เท่านั้น (2026-09-09) — ห้องเดียวที่มองเห็นข้อมูลได้ ไม่ unique ฝั่ง Room จึงอนุญาตหลาย User ต่อห้องเดียวกันได้ (เพื่อนร่วมห้อง)
+  residentRoom     Room?     @relation("ResidentRoom", fields: [residentRoomId], references: [id])
   readings         Reading[]
   createdAt        DateTime  @default(now())
 }
@@ -191,13 +194,13 @@ model ReadingImage {
 | `previousReading` และ `usage` เป็น field ที่ persist บน `Reading` (nullable, snapshot ณ เวลา confirm) | **Phase 1 decision (2026-09-02)**: ผู้ใช้ยืนยันชัดเจนให้ persist ทั้งสอง field แทนการ derive สดทุกครั้ง — trade-off ที่รับทราบแล้ว: เป็น snapshot ณ เวลา confirm ถ้า reading เดือนก่อนหน้าถูกแก้ไขภายหลัง ค่า `previousReading`/`usage` ที่ persist ไว้จะไม่ auto-update ตาม (ต่างจากการ query สดที่เคยออกแบบไว้ในเอกสารรุ่นก่อน) — ถือเป็น audit snapshot ของค่าที่ผู้ใช้เห็น ณ ตอน confirm จริง |
 | `readerId`/`reader` เปลี่ยนชื่อเป็น `recordedBy`/`recorder`, เพิ่ม `recordedAt` แยกจาก `createdAt` | **Phase 1 decision (2026-09-02)**: ตามชื่อ field ที่ผู้ใช้กำหนดใน Phase 1 kickoff — `recordedAt` คือ business timestamp (เวลาที่ผู้ใช้ confirm) ส่วน `createdAt` คือเวลาที่ record ถูกเขียนลง DB จริง (ต่างกันได้ถ้า sync จาก offline queue ช้ากว่า) |
 | `SyncLog` แยกออกจาก `Reading` แทนการเก็บ error ไว้ใน Reading ตรงๆ | รองรับหลาย attempt ต่อ 1 reading (retry) และเก็บ history การ sync ไว้ตรวจสอบย้อนหลังได้ (workflow.md §3) |
-| `residentName` เป็น field บน `Room` ไม่ใช่ผูกกับ `User` | เพราะ RESIDENT ใน MVP ยังไม่มี login จริง (requirement.md §2) และ export ต้องการ "ชื่อ-สกุล" ผูกกับห้อง ไม่ใช่ผูกกับ account |
+| `residentName` เป็น field บน `Room` ไม่ใช่ผูกกับ `User` | ตอนออกแบบตอนแรก (Phase 1) RESIDENT ยังไม่มี login จริง และ export ต้องการ "ชื่อ-สกุล" ผูกกับห้อง ไม่ใช่ผูกกับ account — ยังคงไว้แม้ตอนนี้ RESIDENT มี login จริงแล้ว (2026-09-09, ดู decision-log.md) เพราะ export ต้องการชื่อผู้พักที่ผูกกับห้องอยู่ดี ไม่ใช่ชื่อบัญชีผู้ใช้ที่อาจเป็นเพื่อนร่วมห้องหลายคน |
 | `Meter.code` มี `@unique` | เป็น key ที่ QR code อ้างอิงถึง (workflow.md ขั้นตอน 1 Scan QR → resolve เป็น Meter) |
 
 ---
 
 ## 6. จุดที่ยังรอ requirement เพิ่มเติม (ไม่ block การออกแบบ schema นี้ แต่จะกระทบตอน implement)
 
-- ขอบเขตสิทธิ์ RESIDENT ที่ชัดเจนอาจต้องเพิ่ม relation `User` ↔ `Room` ถ้า RESIDENT ต้อง login จริงในอนาคต (ปัจจุบัน MVP ไม่มี login — ดู requirement.md §5 ข้อ 3)
+- ~~ขอบเขตสิทธิ์ RESIDENT ที่ชัดเจนอาจต้องเพิ่ม relation `User` ↔ `Room` ถ้า RESIDENT ต้อง login จริงในอนาคต~~ — **ทำแล้ว (2026-09-09)**: เพิ่ม `User.residentRoomId` (relation `ResidentRoom`) + login จริงด้วย Google Sign-In เฉพาะ `@rmu.ac.th` แทน MVP เดิมที่ไม่มี login เลย ดูรายละเอียดใน decision-log.md
 - ฟิลด์สำหรับสูตรคำนวณค่าไฟ (ค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้น) **ยังไม่เพิ่มใน schema นี้โดยตั้งใจ** เพราะสูตรยังไม่ final (requirement.md §5 ข้อ 1) — ต่างจาก `usage` ซึ่งคำนวณได้แน่นอนแล้ว (`confirmedValue - previousReading`) และตอนนี้ persist เป็น field บน `Reading` โดยตรงแล้ว (ดู §3.1, §5) ส่วนค่าไฟพื้นฐาน/FT/ภาษี/รวมทั้งสิ้นยังคงคำนวณผ่าน Calculation Service ตอน export เท่านั้น (export-format.md §3) เพราะยังไม่มีสูตรจริง
 - **Persistent storage สำหรับ `public/upload/meter/` บน production (deploy ด้วย Coolify)** ยังเป็นแค่ requirement ระดับ infra ไม่ใช่ schema — ไม่กระทบ `ReadingImage.path` ซึ่งเก็บแค่ path แบบ relative เสมอ ไม่ผูกกับ storage backend ใดโดยเฉพาะ (ดู offline-strategy.md §7 และ tech-stack.md)

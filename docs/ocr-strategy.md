@@ -3,7 +3,8 @@
 > สถานะ: **✅ Locked & Implemented (Phase 4, 2026-09-03)** — Tesseract.js (client-side, on-device) ยืนยันแล้วตอนเริ่ม Phase 4 และ implement จริงที่ `src/lib/ocr/`
 > อ้างอิง business rules จาก [requirement.md](requirement.md) §3.3 และ [workflow.md](workflow.md) ขั้นตอน 5–6
 > **ปรับปรุง 2026-09-02**: OCR Region/Crop เป็นข้อมูลชั่วคราวใน memory/client เท่านั้น **ไม่ persist ลง server หรือ IndexedDB อีกต่อไป** ไม่ว่าจะเลือก provider ใด (ดู [decision-log.md](decision-log.md))
-> **ปรับปรุง Phase 4 (2026-09-03)**: ดู §5 สำหรับรายละเอียด implementation จริง (offline caveat, fixed region, native `rectangle` crop)
+> **ปรับปรุง Phase 4 (2026-09-03)**: ดู §5 สำหรับรายละเอียด implementation จริง (offline caveat, fixed region)
+> **ปรับปรุง Meter ROI Guide (2026-09-14)**: กลับมา manual crop + เพิ่ม preprocessing (resize/grayscale/contrast/threshold/denoise) ก่อน OCR — ดู §5.1
 
 ---
 
@@ -100,10 +101,20 @@ Confirmed Value (Reading.confirmedValue — ค่าที่ใช้จริ
 
 `tesseract.js@7.0.0` — `src/lib/ocr/{ocrRegion,ocrProvider}.ts`
 
-### 5.1 Native crop แทน manual canvas crop
-แทนที่จะ manual crop ภาพผ่าน `<canvas>` แล้วส่ง canvas/blob ที่ครอปแล้วเข้า Tesseract (ตามที่ §4 ร่างไว้เดิม) — implementation จริงส่ง **Original Image เต็มภาพ** เข้า `worker.recognize(imageBlob, { rectangle })` โดย Tesseract.js รองรับ parameter `rectangle` (`{ left, top, width, height }` หน่วยพิกเซล) ให้ crop เองภายใน WASM memory ไม่ต้องสร้าง canvas/Blob ที่ครอปไว้ในโค้ดของเราเองเลย — **เข้มงวดกว่าที่ §4 ระบุไว้อีก**: ไม่มี object รูปภาพที่ครอปแล้วปรากฏใน memory ของแอปเราแม้แต่ชั่วคราว
+### 5.1 Manual canvas crop + preprocessing (Meter ROI Guide, 2026-09-14)
 
-`regionToRectangle()` แปลง fixed region (`DEFAULT_OCR_REGION`, สัดส่วน 0-1 ของภาพ) เป็นพิกเซลตามขนาดภาพจริง พร้อม clamp ให้อยู่ในขอบเขตภาพเสมอ (ค้นพบระหว่าง browser test ว่า rectangle ที่หลุดขอบภาพทำให้ Tesseract/Leptonica **abort ทั้ง WASM worker** แทนที่จะโยน JS error ที่ดักได้ — แก้แล้วด้วยการ clamp ก่อนส่งเข้า Tesseract เสมอ)
+> **อัปเดต 2026-09-14**: กลับมาใช้ manual `<canvas>` crop ตามที่ §4 ร่างไว้เดิม (เลิกใช้ native `rectangle` param ของ Tesseract) เพื่อรองรับ preprocessing ก่อน OCR — ดู [decision-log.md](decision-log.md) "Meter ROI Guide" สำหรับเหตุผลเต็ม กฎ "ไม่ persist crop ถาวร" ยังคงอยู่เหมือนเดิม เปลี่ยนแค่ crop เกิดขึ้นเป็น object จริงใน memory ระหว่างประมวลผลแทนที่จะให้ Tesseract crop เองใน WASM
+
+Pipeline จริงตอนนี้ (ทั้งหมดใน memory, ทิ้งทันทีหลัง `recognizeMeterValue()` คืนผล — ไม่มีจุดใด persist):
+
+1. `lib/image/meterCrop.ts` (`cropToRegion`) — ใช้ `regionToRectangle()` แปลง `DEFAULT_OCR_REGION` เป็นพิกเซล แล้ว `ctx.drawImage()` ครอปเฉพาะบริเวณนั้นลง canvas ใหม่ → คืน `Blob` (PNG)
+2. `lib/image/meterPreprocess.ts` (`preprocessForOcr`) — upscale 3x (default) → grayscale → 3x3 median denoise → contrast enhancement → Otsu adaptive threshold (ขาว-ดำล้วน) → คืน `Blob` (PNG)
+3. `lib/ocr/ocrProvider.ts` (`recognizeMeterValue`) — รับเฉพาะภาพจากขั้นตอน 2 เข้า `worker.recognize()` ตรงๆ (ไม่มี `rectangle` param อีกต่อไป) คืน `{ value, confidence }` (`confidence` มาจาก `data.confidence` หาร 100)
+4. `lib/ocr/ocrValidation.ts` (`validateOcrResult`) — ตรวจ `value` เป็นตัวเลข(+จุดทศนิยม)ล้วน, ความยาว 4-6 หลัก, `confidence >= 0.6` — ไม่ผ่านจะไม่ prefill ค่าให้ ผู้จดต้องถ่ายใหม่หรือกรอกเอง
+
+`regionToRectangle()` เดิมยังคง clamp ให้อยู่ในขอบเขตภาพเสมอ — ตอนนี้ป้องกัน `meterCrop.ts` จาก ROI ที่หลุดขอบภาพ (มือถือบางรุ่น/ภาพเสียหาย) แทนที่จะป้องกัน Tesseract/Leptonica WASM abort แบบเดิม
+
+PNG (ไม่ใช่ JPEG) ทุกขั้นตอนของ crop/preprocess — ภาพหลัง threshold เป็นภาพขาว-ดำล้วน compression artifact ของ JPEG จะทำลายขอบตัวเลขที่คมชัดอยู่แล้ว
 
 ### 5.2 Fixed OCR Region (ไม่มี UI ลากกรอบ)
 `DEFAULT_OCR_REGION = { x: 0.15, y: 0.375, width: 0.7, height: 0.25 }` — กรอบสี่เหลี่ยมคงที่ แสดงเป็น overlay สีเหลืองทับ preview กล้อง ตามที่ §4 อนุญาตให้ทำแบบง่ายสำหรับ demo ไม่ต้องมีระบบลากกรอบอิสระ

@@ -87,20 +87,27 @@ export function deleteMeter(id: string): Promise<MeterDTO[]> {
 export function listUsers(): Promise<UserDTO[]> {
   return request("/api/admin/users");
 }
+// username/password required unless role is RESIDENT (Google login only,
+// email required instead — src/lib/admin/validation.ts's
+// validateResidentEmail enforces @rmu.ac.th server-side too).
 export interface CreateUserInput {
   name: string;
-  username: string;
-  password: string;
+  username?: string;
+  password?: string;
+  email?: string;
   role: RoleValue;
-  zoneIds: string[];
+  zoneIds: string[]; // มีความหมายกับ role METER_READER เท่านั้น
+  roomId?: string; // มีความหมายกับ role RESIDENT เท่านั้น
 }
 // password omitted/blank on update means "keep the current password".
 export interface UpdateUserInput {
   name: string;
-  username: string;
+  username?: string;
   password?: string;
+  email?: string;
   role: RoleValue;
   zoneIds: string[];
+  roomId?: string;
 }
 export function createUser(input: CreateUserInput): Promise<UserDTO[]> {
   return request("/api/admin/users", { method: "POST", body: JSON.stringify(input) });
