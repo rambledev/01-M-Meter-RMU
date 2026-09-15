@@ -967,3 +967,25 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 **ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (164 tests), `npm run build` ผ่านทั้งหมด — รัน `ensureCheckerBypassUser.cjs` จริงกับ PostgreSQL production สำเร็จ (`อัปเดตบัญชี "checker-01" แล้ว (id=demo-user-1) — 6 โซน`)
 
 **สถานะ**: ✅ ใช้งานได้ทันที — เปิด `/checker` หรือ `/checker/reading?meterId=...` จะข้าม login ไปเป็น `checker-01` อัตโนมัติ **ต้องจำไว้ลบ `NEXT_PUBLIC_CHECKER_BYPASS_*` ออกจาก production env ก่อน go-live จริง**
+
+---
+
+## ✅ พบ+แก้บั๊กจริง: OCR confidence ค้างที่ 0% เสมอ (Real Device Calibration) (2026-09-14)
+
+**บริบท**: ทดสอบจริงครั้งแรกผ่าน Upload Image Mode ด้วยภาพมิเตอร์จริง — ROI crop และ preprocessed image ใน OCR Debug Panel แสดงตัวเลข "2318" ชัดเจนถูกต้อง แต่ `confidence` ที่ Tesseract คืนมาเป็น **0% ทุกครั้ง** (70 รายการใน metrics ตรงกันหมด) — ต่ำกว่า `previewConfidence` (0.6) เสมอ ทำให้ระบบไม่ยอมขึ้นค่าให้เลยแม้ค่าจะถูกต้อง 100%
+
+**การสืบสวน**: ใช้ WebSearch เจอ GitHub issue ของ tesseract-ocr/tesseract โดยตรง ([#3706](https://github.com/tesseract-ocr/tesseract/issues/3706) "Character level confidence values are not correct in tesseract 5.0 API", [#4175](https://github.com/tesseract-ocr/tesseract/issues/4175) "0% confidence" บน word block ที่ segment ผิด) — ยืนยันว่าเป็น**บั๊กที่รู้จักแล้วใน Tesseract engine เอง** ไม่ใช่บั๊กในโค้ดของเรา: การตั้ง `tessedit_char_whitelist` ร่วมกับ LSTM engine (default ของ tesseract.js) ทำให้ `MeanTextConf()` คำนวณ confidence ผิดพลาด/เป็น 0 ได้ แม้ข้อความที่อ่านได้จะถูกต้อง
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| **ลบ `tessedit_char_whitelist: "0123456789."` ออกจาก `ocrProvider.ts`** | เป็นสาเหตุตรงของบั๊ก confidence=0 ตาม upstream issue ที่พบ — `ocrValidation.ts`'s regex (`/^[0-9]+(\.[0-9]+)?$/`) ทำหน้าที่กรองข้อความไม่ใช่ตัวเลขอยู่แล้วโดยอิสระจาก whitelist ตัดออกไม่เสียอะไรด้านความถูกต้อง |
+| **เพิ่ม `tessedit_pageseg_mode: PSM.SINGLE_LINE`** แทน | ROI crop ที่ได้จาก `meterCrop.ts`/`meterPreprocess.ts` เป็นแถวตัวเลขบรรทัดเดียวที่ครอปมาแน่นอยู่แล้ว — บอก Tesseract ตรงๆ ว่าคาดหวัง layout แบบนี้ (แทนที่จะเดา auto page layout) ช่วยความแม่นยำโดยไม่มีผลข้างเคียงเหมือน whitelist |
+| ไม่สามารถ reproduce แบบแยกส่วน (isolated) ในสภาพแวดล้อมนี้ได้ (ไม่มี browser/canvas ให้สร้างภาพทดสอบ, tesseract.js ต้องรันใน browser/worker) — อาศัยหลักฐานจาก upstream issue tracker + อาการที่ตรงกันเป๊ะ (ข้อความถูก, confidence เป็น 0 เป๊ะ ไม่ใช่แค่ต่ำ) แทนการ reproduce เอง | โปร่งใสกับผู้ใช้ว่าการแก้นี้อ้างอิงจากหลักฐานทางอ้อม (issue tracker + อาการตรงกัน) ไม่ใช่ reproduce เองได้ 100% — **ต้องให้ผู้ใช้ทดสอบซ้ำกับภาพจริงเพื่อยืนยันว่าแก้ได้จริง** |
+
+**ผลกระทบต่อ workflow การบันทึก**: ไม่มี — แก้แค่ 2 บรรทัดใน `ocrProvider.ts` (parameter ที่ส่งให้ Tesseract) ไม่แตะ `saveOfflineReading()`/`readingWorkflow.ts`/billing/duplicate checking, ไม่เปลี่ยน return type/signature ของ `recognizeMeterValue()`
+
+**ไฟล์ที่แก้**: `src/lib/ocr/ocrProvider.ts`
+
+**ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (164 tests), `npm run build` ผ่านทั้งหมด — **รอผู้ใช้ทดสอบซ้ำกับภาพมิเตอร์จริงเพื่อยืนยันว่า confidence ไม่ค้างที่ 0% อีกต่อไป**
+
+**สถานะ**: 🟡 แก้ตามหลักฐานแล้ว รอ real-device re-test ยืนยันผล — ถ้ายังไม่หาย ขั้นต่อไปคือลอง `OEM.TESSERACT_ONLY` (legacy engine ที่รองรับ whitelist ได้ดีกว่า แลกกับความแม่นยำที่อาจต่ำลง) หรือปรับ `previewConfidence`/`stableConfidence` ใน `lib/calibration/config.ts` ตามค่า confidence จริงที่วัดได้

@@ -1,8 +1,20 @@
-// Prepares a cropped meter-digit image for OCR: upscale, grayscale, contrast
-// enhancement, denoise, then threshold to pure black/white. Improves
-// Tesseract accuracy on small, low-contrast, or glare-affected digit
-// crops. In memory only, same as meterCrop.ts — never persisted.
+// Prepares a cropped meter-digit image for OCR: upscale, grayscale, denoise,
+// contrast enhancement. In memory only, same as meterCrop.ts — never persisted.
 // Browser-only (canvas) — no Node/vitest unit test, same as compressImage.ts.
+//
+// Real Device Calibration finding (2026-09-14): this used to also apply a
+// hard Otsu threshold down to pure black/white, which is the right move for
+// Tesseract's legacy (pre-4.0) engine — but tesseract.js's default engine is
+// LSTM-based, and the LSTM model is trained on natural antialiased text; a
+// harshly binarized image discards the edge-gradient detail its CNN feature
+// extraction relies on. On this meter's mechanical odometer-wheel digit font
+// (visually quite different from normal printed text), hard-thresholding
+// was producing confident-looking but wrong output (e.g. "EERE" for "2318").
+// Kept as enhanced grayscale instead — no threshold/binarize step — which
+// is the documented-better input shape for the LSTM engine. otsuThreshold()/
+// applyThreshold() are kept below (unused for now) rather than deleted, in
+// case a future OEM.TESSERACT_ONLY (legacy engine) experiment wants them
+// back — see docs/decision-log.md and docs/meter-calibration.md.
 
 export interface PreprocessOptions {
   scale?: number; // upscale factor applied to the crop, 2-4x
@@ -35,10 +47,8 @@ export async function preprocessForOcr(
     const gray = toGrayscale(imageData.data, width, height);
     const denoised = medianDenoise(gray, width, height);
     const contrasted = applyContrast(denoised, contrast);
-    const threshold = otsuThreshold(contrasted);
-    const binary = applyThreshold(contrasted, threshold);
 
-    writeGrayscale(imageData.data, binary);
+    writeGrayscale(imageData.data, contrasted);
     ctx.putImageData(imageData, 0, 0);
 
     const processed = await new Promise<Blob | null>((resolve) => {
@@ -97,54 +107,6 @@ function applyContrast(
   const out = new Uint8ClampedArray(gray.length);
   for (let i = 0; i < gray.length; i++) {
     out[i] = factor * (gray[i] - 128) + 128;
-  }
-  return out;
-}
-
-// Otsu's method — picks a threshold from the image's own histogram instead
-// of a fixed guess, so it adapts to different lighting/glare per photo.
-function otsuThreshold(gray: Uint8ClampedArray): number {
-  const histogram = new Array(256).fill(0);
-  for (const value of gray) histogram[value]++;
-
-  const total = gray.length;
-  let sum = 0;
-  for (let t = 0; t < 256; t++) sum += t * histogram[t];
-
-  let sumBackground = 0;
-  let weightBackground = 0;
-  let maxVariance = 0;
-  let threshold = 128;
-
-  for (let t = 0; t < 256; t++) {
-    weightBackground += histogram[t];
-    if (weightBackground === 0) continue;
-    const weightForeground = total - weightBackground;
-    if (weightForeground === 0) break;
-
-    sumBackground += t * histogram[t];
-    const meanBackground = sumBackground / weightBackground;
-    const meanForeground = (sum - sumBackground) / weightForeground;
-
-    const variance =
-      weightBackground *
-      weightForeground *
-      (meanBackground - meanForeground) ** 2;
-    if (variance > maxVariance) {
-      maxVariance = variance;
-      threshold = t;
-    }
-  }
-  return threshold;
-}
-
-function applyThreshold(
-  gray: Uint8ClampedArray,
-  threshold: number,
-): Uint8ClampedArray {
-  const out = new Uint8ClampedArray(gray.length);
-  for (let i = 0; i < gray.length; i++) {
-    out[i] = gray[i] >= threshold ? 255 : 0;
   }
   return out;
 }

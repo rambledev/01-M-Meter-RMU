@@ -31,4 +31,16 @@ describe("DEFAULT_CALIBRATION_CONFIG", () => {
       DEFAULT_CALIBRATION_CONFIG.cameraQuality.checkIntervalMs,
     ).toBeGreaterThan(0);
   });
+
+  it("requires a usage anomaly multiplier greater than 1", () => {
+    expect(
+      DEFAULT_CALIBRATION_CONFIG.reading.usageAnomalyMultiplier,
+    ).toBeGreaterThan(1);
+  });
+
+  it("requires at least 1 historical data point before checking for anomalies", () => {
+    expect(
+      DEFAULT_CALIBRATION_CONFIG.reading.minHistoryForAnomalyCheck,
+    ).toBeGreaterThanOrEqual(1);
+  });
 });

@@ -21,14 +21,23 @@ let workerPromise: Promise<import("tesseract.js").Worker> | null = null;
 async function getWorker() {
   if (!workerPromise) {
     workerPromise = (async () => {
-      const { createWorker } = await import("tesseract.js");
+      const { createWorker, PSM } = await import("tesseract.js");
       const worker = await createWorker("eng");
-      // Meter displays are digits + a decimal point — restricting the
-      // character set measurably improves accuracy over unrestricted text,
-      // and keeps stray label text (e.g. "KILOWATT-HOUR METER", "220V") out
-      // of the result even if it leaks into the cropped frame.
+      // PSM.SINGLE_LINE: the crop is already a tight single row of digits
+      // (meterCrop.ts + meterPreprocess.ts), so tell Tesseract to expect
+      // exactly that instead of guessing a general page layout.
+      //
+      // Deliberately NOT using tessedit_char_whitelist here (it did restrict
+      // output to digits/'.', but real-device testing during Field
+      // Calibration found it makes Tesseract's LSTM engine report 0%
+      // confidence on every read — even when the text itself comes back
+      // correct — a known upstream issue combining char_whitelist with the
+      // LSTM engine's confidence reporting (tesseract-ocr/tesseract#3706,
+      // #4175). ocrValidation.ts's digit-format regex already rejects
+      // anything non-numeric that whitelisting would have blocked, so
+      // dropping it costs nothing on correctness and fixes confidence.
       await worker.setParameters({
-        tessedit_char_whitelist: "0123456789.",
+        tessedit_pageseg_mode: PSM.SINGLE_LINE,
       });
       return worker;
     })();

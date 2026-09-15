@@ -30,11 +30,23 @@ export interface CalibrationConfig {
     /** Laplacian variance below which a frame is flagged blurry (cameraQuality.ts). */
     blurThreshold: number;
   };
+  reading: {
+    /** Usage is flagged as a WARNING (never an error) when it exceeds average(historicalUsages) times this multiplier (meterReadingValidation.ts). */
+    usageAnomalyMultiplier: number;
+    /** Minimum number of historical usage data points required before the anomaly check runs at all — below this, no warning is ever shown (never invent a warning from insufficient data). */
+    minHistoryForAnomalyCheck: number;
+  };
 }
 
 export const DEFAULT_CALIBRATION_CONFIG: CalibrationConfig = {
   ocr: {
-    previewConfidence: 0.6,
+    // 0.6 -> 0.45 (2026-09-14 real-device test, docs/meter-calibration.md):
+    // a correctly-read "2318" on this meter's odometer-wheel digit font
+    // came back at 50% confidence — comfortably above 0.45, with headroom
+    // below 0.6 for normal photo-to-photo variance. stableConfidence stays
+    // at 0.85 (untested at 0.45 preview — only gates the button retry
+    // path's single-shot check for now, not live-preview auto-fill).
+    previewConfidence: 0.45,
     stableConfidence: 0.85,
     stabilityCount: 3,
     liveIntervalMs: 800,
@@ -44,5 +56,9 @@ export const DEFAULT_CALIBRATION_CONFIG: CalibrationConfig = {
     darkThreshold: 60,
     brightThreshold: 200,
     blurThreshold: 50,
+  },
+  reading: {
+    usageAnomalyMultiplier: 2,
+    minHistoryForAnomalyCheck: 2,
   },
 };

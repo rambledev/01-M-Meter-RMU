@@ -17,6 +17,16 @@ interface MeterCameraProps {
   // changing this component's public API. `allowAdjust` has no effect yet.
   initialRegion?: OcrRegion;
   allowAdjust?: boolean;
+  // Manual Reading-first redesign (2026-09-15): OCR is opt-in and OFF by
+  // default. When false, useLiveOcr's `enabled` is false too — it doesn't
+  // just hide the badge, the crop/preprocess/recognize pipeline never runs
+  // at all (no Tesseract calls, no CPU cost) — "OCR ต้องไม่ทำงาน" in the
+  // active manual-reading flow. The ROI guide overlay is OCR-specific too,
+  // so it's tied to the same flag (a plain evidence photo has no reason to
+  // show a "line up the digits here" box). Camera Quality (blur/brightness)
+  // is unrelated to OCR and always stays on regardless of this flag — a
+  // good evidence photo should be in-focus and well-lit either way.
+  showLiveOcr?: boolean;
   // Field Calibration debug panel (development only) — see
   // MeterOcrDebugPanel.tsx. Omit in production usage; harmless if passed
   // since the snapshot itself is always null outside development.
@@ -47,6 +57,7 @@ export default function MeterCamera({
   onFileSelected,
   initialRegion = DEFAULT_OCR_REGION,
   allowAdjust = false,
+  showLiveOcr = false,
   onDebugSnapshot,
 }: MeterCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -90,7 +101,7 @@ export default function MeterCamera({
   }
 
   const { state: liveState, debug } = useLiveOcr(captureLiveFrame, initialRegion, {
-    enabled: phase === "streaming",
+    enabled: showLiveOcr && phase === "streaming",
     mode: "camera",
   });
 
@@ -175,9 +186,9 @@ export default function MeterCamera({
       {phase === "streaming" && (
         <div className="relative overflow-hidden rounded-xl bg-black">
           <video ref={videoRef} className="w-full" playsInline muted />
-          <MeterGuideOverlay region={initialRegion} />
+          {showLiveOcr && <MeterGuideOverlay region={initialRegion} />}
           <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-3">
-            <MeterLiveReadingBadge state={liveState} />
+            {showLiveOcr && <MeterLiveReadingBadge state={liveState} />}
             <MeterCameraQualityWarning quality={quality} />
           </div>
           <MeterCaptureButton onCapture={capture} />

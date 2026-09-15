@@ -72,6 +72,21 @@ export async function findReadingByMeterAndMonth(
     .first();
 }
 
+// Additive — does not change any query above. Most-recent-first confirmed
+// readings for a meter (only ones with a computed `usage`), feeding the
+// Anomaly Detection usage baseline in lib/reading/meterReadingValidation.ts
+// via getUsageHistoryForMeter() in readingWorkflow.ts.
+export async function getRecentReadingsForMeter(
+  meterId: string,
+  limit: number,
+): Promise<LocalReading[]> {
+  const all = await db.readings.where("meterId").equals(meterId).toArray();
+  return all
+    .filter((r) => r.usage !== undefined)
+    .sort((a, b) => (a.readingMonth < b.readingMonth ? 1 : -1))
+    .slice(0, limit);
+}
+
 // Only DRAFT readings can be discarded — anything past confirm must go through
 // the sync/error flow instead (workflow.md §3), not be silently deleted.
 export async function deleteDraftReading(localId: string): Promise<void> {

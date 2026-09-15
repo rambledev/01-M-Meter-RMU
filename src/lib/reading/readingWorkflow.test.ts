@@ -4,6 +4,7 @@ import { getReadingImages } from "@/lib/offline/readingRepository";
 import { getPendingQueueItems } from "@/lib/offline/syncQueueRepository";
 import {
   checkDuplicateReading,
+  getUsageHistoryForMeter,
   lookupPreviousReading,
   saveOfflineReading,
 } from "./readingWorkflow";
@@ -49,6 +50,65 @@ describe("lookupPreviousReading", () => {
   it("reports not-found when there is no reading for the prior month", async () => {
     const result = await lookupPreviousReading("meter-1", "2026-09-01");
     expect(result).toEqual({ value: undefined, found: false });
+  });
+});
+
+describe("getUsageHistoryForMeter", () => {
+  it("returns recent usage values, most recent first, excluding the given month", async () => {
+    await saveOfflineReading({
+      meterId: "meter-1",
+      readingMonth: "2026-06-01",
+      recordedBy: "user-1",
+      previousReading: 100,
+      confirmedValue: 130,
+      image: testImage(),
+    });
+    await saveOfflineReading({
+      meterId: "meter-1",
+      readingMonth: "2026-07-01",
+      recordedBy: "user-1",
+      previousReading: 130,
+      confirmedValue: 165,
+      image: testImage(),
+    });
+    await saveOfflineReading({
+      meterId: "meter-1",
+      readingMonth: "2026-08-01",
+      recordedBy: "user-1",
+      previousReading: 165,
+      confirmedValue: 190,
+      image: testImage(),
+    });
+
+    const history = await getUsageHistoryForMeter("meter-1", "2026-09-01");
+    expect(history).toEqual([25, 35, 30]); // Aug (25), Jul (35), Jun (30) — most recent first
+  });
+
+  it("returns an empty array when the meter has no history yet", async () => {
+    const history = await getUsageHistoryForMeter("meter-never-read", "2026-09-01");
+    expect(history).toEqual([]);
+  });
+
+  it("respects the limit", async () => {
+    const months: Array<[string, number | undefined, number]> = [
+      ["2026-04-01", undefined, 100],
+      ["2026-05-01", 100, 130],
+      ["2026-06-01", 130, 170],
+      ["2026-07-01", 170, 220],
+    ];
+    for (const [readingMonth, previousReading, confirmedValue] of months) {
+      await saveOfflineReading({
+        meterId: "meter-2",
+        readingMonth,
+        recordedBy: "user-1",
+        previousReading,
+        confirmedValue,
+        image: testImage(),
+      });
+    }
+
+    const history = await getUsageHistoryForMeter("meter-2", "2026-08-01", 2);
+    expect(history).toHaveLength(2);
   });
 });
 

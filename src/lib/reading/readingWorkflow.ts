@@ -12,6 +12,7 @@ import {
   createDraftReading,
   findReadingByMeterAndMonth,
   getReading,
+  getRecentReadingsForMeter,
   updateReading,
 } from "@/lib/offline/readingRepository";
 import { enqueueForSync } from "@/lib/offline/syncQueueRepository";
@@ -34,6 +35,24 @@ export async function lookupPreviousReading(
     previousReadingMonth(readingMonth),
   );
   return { value: reading?.confirmedValue, found: reading !== undefined };
+}
+
+// Additive — lookupPreviousReading()/checkDuplicateReading()/
+// saveOfflineReading() below are unchanged. Feeds the Anomaly Detection
+// usage baseline (lib/reading/meterReadingValidation.ts): recent confirmed
+// usage values for this meter, excluding the month currently being
+// entered (defensive — that month normally has no reading yet anyway,
+// since duplicate checking blocks re-entering one that does).
+export async function getUsageHistoryForMeter(
+  meterId: string,
+  excludingReadingMonth: string,
+  limit = 6,
+): Promise<number[]> {
+  const recent = await getRecentReadingsForMeter(meterId, limit + 1);
+  return recent
+    .filter((r) => r.readingMonth !== excludingReadingMonth)
+    .slice(0, limit)
+    .map((r) => r.usage as number);
 }
 
 // Client-side best-effort duplicate check (requirement.md §3.2) — the
