@@ -6,10 +6,16 @@ import { verifyGoogleIdToken } from "@/lib/resident/googleAuth";
 // ผู้พักอาศัย (Resident) login — Google Sign-In only, restricted to
 // @rmu.ac.th (2026-09-09, replaces the earlier username/password login by
 // explicit request: "ให้ login ด้วย gmail @rmu.ac.th เท่านั้น"). No
-// admin-provisioned account needed beforehand — the first successful
-// Google login for a given @rmu.ac.th email auto-creates its RESIDENT
-// User row (with no room yet); an Admin can still pre-create one with a
-// room already assigned via /admin, in which case this just finds it.
+// admin-provisioned account needed beforehand — an Admin can still
+// pre-create one with a room already assigned via /admin (auto-approved,
+// since an Admin created it directly), in which case this just finds it.
+//
+// (2026-09-16) A brand-new email with no Admin-created account yet now
+// auto-creates its RESIDENT row with isApproved=false instead of logging
+// in immediately — it must wait for an Admin to approve it at /admin
+// (ข้อมูลผู้ใช้งาน) first, same policy as the unified self-service signup
+// on /login (src/app/api/auth/register). This only affects genuinely new
+// emails; nothing changes for already-approved accounts.
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const credential = typeof body?.credential === "string" ? body.credential : "";
@@ -33,9 +39,17 @@ export async function POST(request: Request) {
 
   if (!user) {
     const created = await prisma.user.create({
-      data: { name: verified.name, email: verified.email, role: "RESIDENT" },
+      data: { name: verified.name, email: verified.email, role: "RESIDENT", isApproved: false },
     });
     user = { ...created, residentRoom: null };
+  }
+
+  if (!user.isApproved) {
+    return apiError(
+      403,
+      "VALIDATION_ERROR",
+      "บัญชีของคุณกำลังรอการอนุมัติจากผู้ดูแลระบบ กรุณาลองใหม่ภายหลัง",
+    );
   }
 
   return NextResponse.json({

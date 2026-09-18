@@ -11,6 +11,7 @@ import UsageSummaryCard from "@/components/reading/UsageSummaryCard";
 import MonthYearSelect from "@/components/MonthYearSelect";
 import CheckerAuthGate from "@/components/checker/CheckerAuthGate";
 import { fetchBillingConfig } from "@/lib/billing/billingConfigApi";
+import { fetchFtForMonth } from "@/lib/billing/ftApi";
 import type { BillingConfig } from "@/lib/billing/types";
 import { resolveRecorderName } from "@/lib/checker/resolveRecorderName";
 import type { CheckerSession } from "@/lib/checker/types";
@@ -88,6 +89,21 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
   useEffect(() => {
     fetchBillingConfig().then(setBillingConfig);
   }, []);
+
+  // Ft resolved specifically for the selected reading month (2026-09-17) —
+  // re-fetched whenever the checker changes the month, never reused across
+  // months. null = FT_NOT_CONFIGURED for that month.
+  const [resolvedFtRate, setResolvedFtRate] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFtForMonth(monthValue).then((rate) => {
+      if (!cancelled) setResolvedFtRate(rate);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [monthValue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -281,6 +297,7 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
               confirmedValue={savedReading.confirmedValue}
               previousReading={savedReading.previousReading ?? null}
               config={billingConfig}
+              resolvedFtRate={resolvedFtRate}
             />
           )}
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -360,6 +377,7 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
               usage={evaluation.usage}
               hasEvidenceImage={capturedImageBlob !== null}
               billingConfig={billingConfig}
+              resolvedFtRate={resolvedFtRate}
               errors={
                 evaluation.previousReadingError ? [evaluation.previousReadingError] : []
               }

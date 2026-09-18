@@ -58,16 +58,20 @@ describe("calculateBaseCharge", () => {
 });
 
 describe("calculateFT", () => {
-  it("multiplies usage by the configured FT rate", () => {
-    expect(calculateFT(283, DEFAULT_BILLING_CONFIG)).toBeCloseTo(27.51, 2);
+  it("multiplies usage by the resolved FT rate", () => {
+    expect(calculateFT(283, 0.0972)).toBeCloseTo(27.51, 2);
   });
 
   it("returns null when usage is null", () => {
-    expect(calculateFT(null, DEFAULT_BILLING_CONFIG)).toBeNull();
+    expect(calculateFT(null, 0.0972)).toBeNull();
   });
 
-  it("uses whatever ftRate the config carries, not a hard-coded rate", () => {
-    expect(calculateFT(100, { ...FLAT_CONFIG, ftRate: 1.5 })).toBe(150);
+  it("returns null when ftRate is null (FT_NOT_CONFIGURED) — no fallback to 0", () => {
+    expect(calculateFT(100, null)).toBeNull();
+  });
+
+  it("uses whatever ftRate is passed in, not a hard-coded rate", () => {
+    expect(calculateFT(100, 1.5)).toBe(150);
   });
 });
 
@@ -100,8 +104,8 @@ describe("calculateTotal", () => {
 });
 
 describe("calculateBilling", () => {
-  it("computes the full breakdown from confirmedValue/previousReading/config", () => {
-    const result = calculateBilling(110, 10, FLAT_CONFIG);
+  it("computes the full breakdown from confirmedValue/previousReading/config/resolvedFtRate", () => {
+    const result = calculateBilling(110, 10, FLAT_CONFIG, 0.5);
     // usage = 100; baseCharge = 100*2 + 10 = 210; ft = 100*0.5 = 50;
     // tax = (210+50)*10% = 26; total = 210+50+26 = 286
     expect(result.usage).toBe(100);
@@ -109,31 +113,44 @@ describe("calculateBilling", () => {
     expect(result.ft).toBe(50);
     expect(result.tax).toBeCloseTo(26, 5);
     expect(result.total).toBeCloseTo(286, 5);
+    expect(result.ftNotConfigured).toBe(false);
   });
 
   it("never guesses a previous reading — withholds the whole bill instead", () => {
-    expect(calculateBilling(110, null, FLAT_CONFIG)).toEqual({
+    expect(calculateBilling(110, null, FLAT_CONFIG, 0.5)).toEqual({
       usage: null,
       baseCharge: null,
       ft: null,
       tax: null,
       total: null,
+      ftNotConfigured: false,
     });
   });
 
   it("withholds the whole bill when confirmedValue itself is missing", () => {
-    expect(calculateBilling(null, 10, FLAT_CONFIG)).toEqual({
+    expect(calculateBilling(null, 10, FLAT_CONFIG, 0.5)).toEqual({
       usage: null,
       baseCharge: null,
       ft: null,
       tax: null,
       total: null,
+      ftNotConfigured: false,
     });
   });
 
   it("matches the FT worked example from the Phase 6B spec (283 units)", () => {
-    const result = calculateBilling(3120, 2837, DEFAULT_BILLING_CONFIG);
+    const result = calculateBilling(3120, 2837, DEFAULT_BILLING_CONFIG, 0.0972);
     expect(result.usage).toBe(283);
     expect(result.ft).toBeCloseTo(27.51, 2);
+  });
+
+  it("withholds the whole bill and flags ftNotConfigured when the month has no Ft — never falls back to 0/default", () => {
+    const result = calculateBilling(110, 10, FLAT_CONFIG, null);
+    expect(result.usage).toBe(100); // usage itself is still known
+    expect(result.baseCharge).toBeNull();
+    expect(result.ft).toBeNull();
+    expect(result.tax).toBeNull();
+    expect(result.total).toBeNull();
+    expect(result.ftNotConfigured).toBe(true);
   });
 });

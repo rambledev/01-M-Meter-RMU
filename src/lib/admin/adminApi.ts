@@ -100,6 +100,8 @@ export interface CreateUserInput {
   roomId?: string; // มีความหมายกับ role RESIDENT เท่านั้น
 }
 // password omitted/blank on update means "keep the current password".
+// isApproved omitted means "leave as-is" — pass it explicitly to approve
+// (or revoke) a self-service signup (src/app/api/auth/register).
 export interface UpdateUserInput {
   name: string;
   username?: string;
@@ -108,6 +110,7 @@ export interface UpdateUserInput {
   role: RoleValue;
   zoneIds: string[];
   roomId?: string;
+  isApproved?: boolean;
 }
 export function createUser(input: CreateUserInput): Promise<UserDTO[]> {
   return request("/api/admin/users", { method: "POST", body: JSON.stringify(input) });
@@ -132,4 +135,30 @@ export function updateBillingConfig(input: BillingConfig): Promise<BillingConfig
     method: "PUT",
     body: JSON.stringify(input),
   });
+}
+
+// Evidence document for the current billing rate settings — separate from
+// updateBillingConfig() above (never touches ftRate/taxRatePercent/
+// baseCharge/tiers, and vice versa). Not using request()'s JSON helper
+// here: a file upload needs multipart/form-data, which the browser sets
+// its own boundary for — an explicit "Content-Type: application/json"
+// header would break it.
+export async function uploadBillingConfigDocument(file: File): Promise<BillingConfig> {
+  const formData = new FormData();
+  formData.append("file", file);
+  let res: Response;
+  try {
+    res = await fetch("/api/admin/billing-config/document", { method: "POST", body: formData });
+  } catch {
+    throw new Error("เชื่อมต่อเครือข่ายไม่สำเร็จ");
+  }
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body?.ok) {
+    throw new Error(body?.message ?? "อัปโหลดไม่สำเร็จ");
+  }
+  return body.data as BillingConfig;
+}
+
+export function deleteBillingConfigDocument(): Promise<BillingConfig> {
+  return request("/api/admin/billing-config/document", { method: "DELETE" });
 }

@@ -11,19 +11,31 @@ const CONFIG: BillingConfig = {
 
 describe("buildBillingBreakdown", () => {
   it("delegates every number to the Calculation Service", () => {
-    const breakdown = buildBillingBreakdown(110, 10, CONFIG);
+    const breakdown = buildBillingBreakdown(110, 10, CONFIG, 0.5);
     expect(breakdown.usage).toBe(100);
     expect(breakdown.baseCharge).toBe(210); // 100*2 + 10
     expect(breakdown.ft).toBe(50);
+    expect(breakdown.ftNotConfigured).toBe(false);
     expect(breakdown.tierLines).toEqual([
       { tier: CONFIG.tiers[0], units: 100, charge: 200 },
     ]);
   });
 
   it("returns an empty tier breakdown when there is no previous reading", () => {
-    const breakdown = buildBillingBreakdown(110, null, CONFIG);
+    const breakdown = buildBillingBreakdown(110, null, CONFIG, 0.5);
     expect(breakdown.usage).toBeNull();
     expect(breakdown.tierLines).toEqual([]);
     expect(breakdown.baseCharge).toBeNull();
+    expect(breakdown.ftNotConfigured).toBe(false);
+  });
+
+  it("withholds the whole bill and flags ftNotConfigured when Ft is not resolved for the month", () => {
+    const breakdown = buildBillingBreakdown(110, 10, CONFIG, null);
+    expect(breakdown.usage).toBe(100); // usage is still known
+    expect(breakdown.baseCharge).toBeNull();
+    expect(breakdown.ft).toBeNull();
+    expect(breakdown.tax).toBeNull();
+    expect(breakdown.total).toBeNull();
+    expect(breakdown.ftNotConfigured).toBe(true);
   });
 });

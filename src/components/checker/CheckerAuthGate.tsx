@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { loginChecker } from "@/lib/checker/checkerAuthApi";
 import {
@@ -146,6 +147,12 @@ export default function CheckerAuthGate({
           >
             {busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
           </button>
+          <Link
+            href="/"
+            className="text-center text-sm font-semibold text-emerald-700 underline dark:text-emerald-400"
+          >
+            ยังไม่มีบัญชี? สมัครสมาชิกใหม่ด้วย Google
+          </Link>
         </div>
       </div>
     );

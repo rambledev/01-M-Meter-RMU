@@ -27,6 +27,7 @@ async function listUsers(): Promise<UserDTO[]> {
     username: u.username,
     email: u.email,
     role: u.role,
+    isApproved: u.isApproved,
     responsibleZones: u.responsibleZones,
     residentRoom: u.residentRoom
       ? { id: u.residentRoom.id, name: u.residentRoom.name, zoneName: u.residentRoom.zone.name }
@@ -38,12 +39,21 @@ async function listUsers(): Promise<UserDTO[]> {
 // Password is optional here: a blank/absent value means "keep the current
 // password" — the edit form never shows or requires the existing one.
 // RESIDENT accounts have no password at all (Google login) — username/
-// password are only required for every other role.
+// password are only required for every other role EXCEPT a METER_READER
+// that signed up itself through /login's Google role picker (2026-09-16):
+// that account has an email + no username, same as a resident, and stays
+// that way here (its email is tied to its Google identity — not
+// user-editable through this form). `isApproved` is optional in the body:
+// admins use this same edit form to approve a pending self-service
+// signup (and, for METER_READER, assign zones) in one save.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) return apiError(404, "NOT_FOUND", "ไม่พบผู้ใช้งานนี้");
+
   const body = await request.json().catch(() => null);
   const name = validateRequiredString(body?.name);
   const zoneIds = validateZoneIds(body?.zoneIds);
@@ -55,14 +65,25 @@ export async function PATCH(
   if (!zoneIds) return apiError(400, "VALIDATION_ERROR", "โซนที่รับผิดชอบไม่ถูกต้อง");
 
   const isResident = body.role === "RESIDENT";
-  const email = isResident ? validateResidentEmail(body?.email) : null;
-  const username = isResident ? null : validateRequiredString(body?.username);
+  const isGoogleMeterReader =
+    !isResident && existing.role === "METER_READER" && existing.email !== null && existing.username === null;
+
+  const email = isResident
+    ? validateResidentEmail(body?.email)
+    : isGoogleMeterReader
+      ? existing.email
+      : null;
+  const username = isResident || isGoogleMeterReader ? null : validateRequiredString(body?.username);
   if (isResident && !email) {
     return apiError(400, "VALIDATION_ERROR", "กรุณาระบุอีเมล @rmu.ac.th ให้ถูกต้อง");
   }
-  if (!isResident && !username) return apiError(400, "VALIDATION_ERROR", "กรุณาระบุ Username");
+  if (!isResident && !isGoogleMeterReader && !username) {
+    return apiError(400, "VALIDATION_ERROR", "กรุณาระบุ Username");
+  }
 
-  const newPassword = isResident ? null : validateRequiredString(body?.password);
+  const newPassword =
+    isResident || isGoogleMeterReader ? null : validateRequiredString(body?.password);
+  const isApproved = typeof body?.isApproved === "boolean" ? body.isApproved : undefined;
 
   try {
     await prisma.user.update({
@@ -72,6 +93,7 @@ export async function PATCH(
         username,
         email,
         role: body.role,
+        ...(isApproved !== undefined ? { isApproved } : {}),
         responsibleZones: { set: zoneIds.map((zid) => ({ id: zid })) },
         residentRoom: roomId ? { connect: { id: roomId } } : { disconnect: true },
         ...(newPassword ? { passwordHash: await hashPassword(newPassword) } : {}),

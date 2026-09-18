@@ -45,6 +45,7 @@ export interface MockUser {
   passwordHash: string | null;
   email: string | null; // มีความหมายกับ role RESIDENT เท่านั้น (login ด้วย Google, ไม่มี username/passwordHash)
   role: RoleValue;
+  isApproved: boolean; // (2026-09-16) false เฉพาะบัญชีที่สมัครเองผ่าน /login แล้วรอ Admin อนุมัติ
   responsibleZoneIds: string[]; // มีความหมายกับ role METER_READER เท่านั้น
   residentRoomId: string | null; // มีความหมายกับ role RESIDENT เท่านั้น
   createdAt: Date;
@@ -92,6 +93,8 @@ export interface MockBillingConfigRow {
   taxRatePercent: number;
   baseCharge: number;
   tiers: MockBillingTier[];
+  documentPath: string | null;
+  documentName: string | null;
   updatedAt: Date;
 }
 
@@ -145,6 +148,7 @@ export const mockUsers: MockUser[] = [
     passwordHash: DEMO_PASSWORD_HASH,
     email: null,
     role: "METER_READER",
+    isApproved: true,
     responsibleZoneIds: ["mock-zone-1", "mock-zone-2", "mock-zone-3"],
     residentRoomId: null,
     createdAt: now,
@@ -156,6 +160,7 @@ export const mockUsers: MockUser[] = [
     passwordHash: null,
     email: "resident-demo@rmu.ac.th",
     role: "RESIDENT",
+    isApproved: true,
     responsibleZoneIds: [],
     residentRoomId: "mock-room-1",
     createdAt: now,
@@ -205,3 +210,46 @@ export let mockBillingConfig: MockBillingConfigRow | null = null;
 export function setMockBillingConfig(row: MockBillingConfigRow): void {
   mockBillingConfig = row;
 }
+
+// Ft (ค่า Ft) — Monthly Rate (2026-09-17). Empty by default, same as every
+// other mock table (populated only by whatever the running app creates).
+export type MockFtStatus = "ACTIVE" | "DISABLED";
+export type MockFtHistoryAction = "CREATE" | "UPDATE" | "DISABLE" | "ENABLE";
+
+export interface MockFtRate {
+  id: string;
+  readingMonth: Date;
+  ftRate: number;
+  status: MockFtStatus;
+  notes: string | null;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MockFtRateHistory {
+  id: string;
+  ftRateId: string;
+  readingMonth: Date;
+  action: MockFtHistoryAction;
+  oldValue: number | null;
+  newValue: number | null;
+  reason: string | null;
+  performedBy: string;
+  performedAt: Date;
+}
+
+export interface MockFtDocument {
+  id: string;
+  ftRateId: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storagePath: string;
+  uploadedBy: string;
+  uploadedAt: Date;
+}
+
+export const mockFtRates: MockFtRate[] = [];
+export const mockFtRateHistory: MockFtRateHistory[] = [];
+export const mockFtDocuments: MockFtDocument[] = [];

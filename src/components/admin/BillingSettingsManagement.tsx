@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { updateBillingConfig } from "@/lib/admin/adminApi";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import {
+  deleteBillingConfigDocument,
+  updateBillingConfig,
+  uploadBillingConfigDocument,
+} from "@/lib/admin/adminApi";
 import { DEFAULT_BILLING_CONFIG } from "@/lib/billing/defaultConfig";
 import { fetchBillingConfig } from "@/lib/billing/billingConfigApi";
 import { validateTiers } from "@/lib/billing/tierValidation";
@@ -46,6 +50,12 @@ export default function BillingSettingsManagement() {
   const [busy, setBusy] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
+  const [documentPath, setDocumentPath] = useState<string | null>(null);
+  const [documentName, setDocumentName] = useState<string | null>(null);
+  const [documentBusy, setDocumentBusy] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -55,12 +65,46 @@ export default function BillingSettingsManagement() {
       setTaxRatePercent(String(config.taxRatePercent));
       setBaseCharge(String(config.baseCharge));
       setTiers(toDraftTiers(config.tiers));
+      setDocumentPath(config.documentPath ?? null);
+      setDocumentName(config.documentName ?? null);
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  async function handleUploadDocument(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setDocumentBusy(true);
+    setDocumentError(null);
+    try {
+      const saved = await uploadBillingConfigDocument(file);
+      setDocumentPath(saved.documentPath ?? null);
+      setDocumentName(saved.documentName ?? null);
+    } catch (err) {
+      setDocumentError(err instanceof Error ? err.message : "อัปโหลดไม่สำเร็จ");
+    } finally {
+      setDocumentBusy(false);
+    }
+  }
+
+  async function handleDeleteDocument() {
+    if (!window.confirm("ลบไฟล์หลักฐานนี้ใช่หรือไม่?")) return;
+    setDocumentBusy(true);
+    setDocumentError(null);
+    try {
+      const saved = await deleteBillingConfigDocument();
+      setDocumentPath(saved.documentPath ?? null);
+      setDocumentName(saved.documentName ?? null);
+    } catch (err) {
+      setDocumentError(err instanceof Error ? err.message : "ลบไม่สำเร็จ");
+    } finally {
+      setDocumentBusy(false);
+    }
+  }
 
   function updateTier(index: number, patch: Partial<DraftTier>) {
     setSavedMessage(null);
@@ -150,8 +194,12 @@ export default function BillingSettingsManagement() {
 
       <div className="flex flex-col gap-1">
         <label className="text-sm" htmlFor="ft-rate">
-          FT (บาท/หน่วย)
+          FT (บาท/หน่วย) — ค่าเดิม (ไม่ใช้คำนวณแล้ว)
         </label>
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          ⚠ Ft กลายเป็นค่ารายเดือนแล้ว (2026-09-17) — ค่านี้เก็บไว้เพื่อความเข้ากันได้เท่านั้น
+          ไม่ถูกใช้คำนวณค่าไฟอีกต่อไป กรุณากำหนด Ft ที่แท็บ &quot;ค่า Ft&quot;
+        </p>
         <input
           id="ft-rate"
           type="number"
@@ -270,6 +318,47 @@ export default function BillingSettingsManagement() {
         >
           + เพิ่มช่วงอัตรา
         </button>
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+        <p className="text-sm font-semibold">หลักฐานการปรับค่าไฟ</p>
+        <p className="text-xs text-zinc-500">
+          เอกสาร/ประกาศอ้างอิงการปรับอัตราค่าไฟ (PDF, JPG, PNG, WEBP — สูงสุด 10MB) เก็บได้ทีละไฟล์ อัปโหลดใหม่จะแทนที่ไฟล์เดิม
+        </p>
+
+        {documentPath && documentName ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
+            <a
+              href={documentPath}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-700 underline dark:text-emerald-400"
+            >
+              📎 {documentName}
+            </a>
+            <button
+              type="button"
+              onClick={handleDeleteDocument}
+              disabled={documentBusy}
+              className="ml-auto rounded-lg border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50 dark:border-red-800 dark:text-red-400"
+            >
+              ลบไฟล์
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-500">ยังไม่ได้แนบไฟล์หลักฐาน</p>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf,image/jpeg,image/png,image/webp"
+          onChange={handleUploadDocument}
+          disabled={documentBusy}
+          className="text-sm"
+        />
+        {documentBusy && <p className="text-xs text-zinc-500">กำลังดำเนินการ...</p>}
+        {documentError && <p className="text-sm font-medium text-red-600">{documentError}</p>}
       </div>
 
       {errors.length > 0 && (

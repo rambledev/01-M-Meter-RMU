@@ -2,6 +2,14 @@ import { OAuth2Client } from "google-auth-library";
 
 const ALLOWED_DOMAIN = "rmu.ac.th";
 
+// (2026-09-17) Per-email exception to the @rmu.ac.th-only rule above —
+// requested explicitly by the user to let one specific Admin account log
+// in with a non-RMU Gmail address. Deliberately a small hardcoded
+// allowlist (not a config toggle that broadens the whole domain rule):
+// every other account still must be @rmu.ac.th, this list only ever adds
+// specific already-approved individual addresses, never a pattern/domain.
+const EXTRA_ALLOWED_EMAILS = new Set(["techodev.2024@gmail.com"]);
+
 export interface VerifiedGoogleUser {
   email: string;
   name: string;
@@ -28,7 +36,7 @@ export async function verifyGoogleIdToken(idToken: string): Promise<VerifiedGoog
     if (!payload?.email || !payload.email_verified) return null;
 
     const email = payload.email.toLowerCase();
-    if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) return null;
+    if (!email.endsWith(`@${ALLOWED_DOMAIN}`) && !EXTRA_ALLOWED_EMAILS.has(email)) return null;
 
     return { email, name: payload.name ?? email };
   } catch (err) {

@@ -330,9 +330,6 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
       >
         ดูประวัติ / Export Excel / อธิบายค่าไฟ
       </Link>
-      <Link href="/" className="text-center text-xs text-zinc-500 underline">
-        เปลี่ยนบทบาท
-      </Link>
     </div>
   );
 }

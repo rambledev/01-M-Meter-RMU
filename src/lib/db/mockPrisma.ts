@@ -8,12 +8,20 @@
 import { Prisma } from "@prisma/client";
 import {
   type MockBillingConfigRow,
+  type MockFtDocument,
+  type MockFtHistoryAction,
+  type MockFtRate,
+  type MockFtRateHistory,
+  type MockFtStatus,
   type MockMeter,
   type MockReading,
   type MockRoom,
   type MockUser,
   type MockZone,
   mockBillingConfig,
+  mockFtDocuments,
+  mockFtRateHistory,
+  mockFtRates,
   mockMeters,
   mockReadingImages,
   mockReadings,
@@ -325,6 +333,7 @@ const user = {
       email?: string | null;
       passwordHash?: string | null;
       role: MockUser["role"];
+      isApproved?: boolean;
       responsibleZones?: { connect: { id: string }[] };
       residentRoom?: { connect: { id: string } };
     };
@@ -350,6 +359,7 @@ const user = {
       passwordHash: args.data.passwordHash ?? null,
       email: args.data.email ?? null,
       role: args.data.role,
+      isApproved: args.data.isApproved ?? true, // matches schema.prisma's @default(true)
       responsibleZoneIds: zoneIds,
       residentRoomId: roomId,
       createdAt: new Date(),
@@ -364,6 +374,7 @@ const user = {
       username?: string | null;
       email?: string | null;
       role?: MockUser["role"];
+      isApproved?: boolean;
       responsibleZones?: { set: { id: string }[] };
       residentRoom?: { connect: { id: string } } | { disconnect: true };
       passwordHash?: string;
@@ -398,6 +409,7 @@ const user = {
     if (args.data.username !== undefined) u.username = args.data.username;
     if (args.data.email !== undefined) u.email = args.data.email;
     if (args.data.role !== undefined) u.role = args.data.role;
+    if (args.data.isApproved !== undefined) u.isApproved = args.data.isApproved;
     if (args.data.passwordHash) u.passwordHash = args.data.passwordHash;
     return u;
   },
@@ -597,19 +609,44 @@ const syncLog = {
 
 // ---- billingConfig ----
 
+interface BillingConfigCreateData {
+  id: string;
+  ftRate: number;
+  taxRatePercent: number;
+  baseCharge: number;
+  tiers: unknown;
+  documentPath?: string | null;
+  documentName?: string | null;
+}
+
+// Real Prisma's `update` only overwrites the fields you pass — everything
+// else on the row stays as-is. Modeled properly here (merge onto the
+// existing row) rather than reconstructing the whole row from `update`
+// alone, so a document-only upsert (src/lib/billing/billingConfigServer.ts's
+// saveBillingConfigDocument()) can never accidentally null out
+// ftRate/taxRatePercent/baseCharge/tiers, and vice versa.
+interface BillingConfigUpdateData {
+  ftRate?: number;
+  taxRatePercent?: number;
+  baseCharge?: number;
+  tiers?: unknown;
+  documentPath?: string | null;
+  documentName?: string | null;
+}
+
 const billingConfig = {
   async findUnique() {
     return mockBillingConfig;
   },
-  async create(args: {
-    data: { id: string; ftRate: number; taxRatePercent: number; baseCharge: number; tiers: unknown };
-  }) {
+  async create(args: { data: BillingConfigCreateData }) {
     const row: MockBillingConfigRow = {
       id: args.data.id,
       ftRate: args.data.ftRate,
       taxRatePercent: args.data.taxRatePercent,
       baseCharge: args.data.baseCharge,
       tiers: args.data.tiers as MockBillingConfigRow["tiers"],
+      documentPath: args.data.documentPath ?? null,
+      documentName: args.data.documentName ?? null,
       updatedAt: new Date(),
     };
     setMockBillingConfig(row);
@@ -617,19 +654,193 @@ const billingConfig = {
   },
   async upsert(args: {
     where: { id: string };
-    create: { id: string; ftRate: number; taxRatePercent: number; baseCharge: number; tiers: unknown };
-    update: { ftRate: number; taxRatePercent: number; baseCharge: number; tiers: unknown };
+    create: BillingConfigCreateData;
+    update: BillingConfigUpdateData;
   }) {
+    if (!mockBillingConfig) {
+      const row: MockBillingConfigRow = {
+        id: args.create.id,
+        ftRate: args.create.ftRate,
+        taxRatePercent: args.create.taxRatePercent,
+        baseCharge: args.create.baseCharge,
+        tiers: args.create.tiers as MockBillingConfigRow["tiers"],
+        documentPath: args.create.documentPath ?? null,
+        documentName: args.create.documentName ?? null,
+        updatedAt: new Date(),
+      };
+      setMockBillingConfig(row);
+      return row;
+    }
+    const u = args.update;
     const row: MockBillingConfigRow = {
-      id: args.where.id,
-      ftRate: args.update.ftRate,
-      taxRatePercent: args.update.taxRatePercent,
-      baseCharge: args.update.baseCharge,
-      tiers: args.update.tiers as MockBillingConfigRow["tiers"],
+      ...mockBillingConfig,
+      ...(u.ftRate !== undefined ? { ftRate: u.ftRate } : {}),
+      ...(u.taxRatePercent !== undefined ? { taxRatePercent: u.taxRatePercent } : {}),
+      ...(u.baseCharge !== undefined ? { baseCharge: u.baseCharge } : {}),
+      ...(u.tiers !== undefined ? { tiers: u.tiers as MockBillingConfigRow["tiers"] } : {}),
+      ...(u.documentPath !== undefined ? { documentPath: u.documentPath } : {}),
+      ...(u.documentName !== undefined ? { documentName: u.documentName } : {}),
       updatedAt: new Date(),
     };
     setMockBillingConfig(row);
     return row;
+  },
+};
+
+// ---- ftRate / ftRateHistory / ftDocument ----
+// (2026-09-17) Monthly Ft rate + append-only audit history + supporting
+// documents. Mirrors exactly what src/lib/billing/ftService.ts and
+// src/lib/billing/ftResolver.ts actually call — not a generic Prisma
+// engine, same posture as every other model above.
+
+function ftRateCreator(row: MockFtRate): MockUser {
+  const u = mockUsers.find((x) => x.id === row.createdBy);
+  if (!u) throw new Error(`mock data inconsistency: ftRate ${row.id} has no creator`);
+  return u;
+}
+
+function ftDocumentsFor(ftRateId: string) {
+  return mockFtDocuments
+    .filter((d) => d.ftRateId === ftRateId)
+    .sort((a, b) => a.uploadedAt.getTime() - b.uploadedAt.getTime())
+    .map((d) => ({ ...d, uploader: mockUsers.find((u) => u.id === d.uploadedBy)! }));
+}
+
+function withFtRateRelations(row: MockFtRate) {
+  return { ...row, creator: ftRateCreator(row), documents: ftDocumentsFor(row.id) };
+}
+
+interface FtRateFindArgs {
+  where?: { id?: string; readingMonth?: Date; status?: MockFtStatus };
+}
+
+const ftRate = {
+  async findFirst(args: FtRateFindArgs) {
+    let list = mockFtRates;
+    const where = args.where;
+    if (where?.id) list = list.filter((r) => r.id === where.id);
+    if (where?.readingMonth) list = list.filter((r) => sameMonth(r.readingMonth, where.readingMonth!));
+    if (where?.status) list = list.filter((r) => r.status === where.status);
+    const match = list[0];
+    return match ? withFtRateRelations(match) : null;
+  },
+  async findUnique(args: { where: { id: string } }) {
+    const row = mockFtRates.find((r) => r.id === args.where.id);
+    return row ? withFtRateRelations(row) : null;
+  },
+  async findUniqueOrThrow(args: { where: { id: string } }) {
+    const row = mockFtRates.find((r) => r.id === args.where.id);
+    if (!row) throw notFoundError();
+    return withFtRateRelations(row);
+  },
+  async findMany(args?: { orderBy?: { readingMonth?: "asc" | "desc" } }) {
+    const list = [...mockFtRates];
+    if (args?.orderBy?.readingMonth) {
+      const dir = args.orderBy.readingMonth === "desc" ? -1 : 1;
+      list.sort((a, b) => dir * (a.readingMonth.getTime() - b.readingMonth.getTime()));
+    }
+    return list.map(withFtRateRelations);
+  },
+  async create(args: {
+    data: { readingMonth: Date; ftRate: number; notes: string | null; createdBy: string };
+  }) {
+    if (mockFtRates.some((r) => sameMonth(r.readingMonth, args.data.readingMonth))) {
+      throw uniqueConstraintError("Unique constraint failed on FtRate.readingMonth");
+    }
+    const row: MockFtRate = {
+      id: newId("ftRate"),
+      readingMonth: args.data.readingMonth,
+      ftRate: args.data.ftRate,
+      status: "ACTIVE",
+      notes: args.data.notes,
+      createdBy: args.data.createdBy,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    mockFtRates.push(row);
+    return row;
+  },
+  async update(args: {
+    where: { id: string };
+    data: { ftRate?: number; notes?: string | null; status?: MockFtStatus };
+  }) {
+    const row = mockFtRates.find((r) => r.id === args.where.id);
+    if (!row) throw notFoundError();
+    if (args.data.ftRate !== undefined) row.ftRate = args.data.ftRate;
+    if (args.data.notes !== undefined) row.notes = args.data.notes;
+    if (args.data.status !== undefined) row.status = args.data.status;
+    row.updatedAt = new Date();
+    return row;
+  },
+};
+
+const ftRateHistory = {
+  async create(args: {
+    data: {
+      ftRateId: string;
+      readingMonth: Date;
+      action: MockFtHistoryAction;
+      oldValue: number | null;
+      newValue: number | null;
+      reason: string | null;
+      performedBy: string;
+    };
+  }) {
+    const row: MockFtRateHistory = {
+      id: newId("ftRateHistory"),
+      ftRateId: args.data.ftRateId,
+      readingMonth: args.data.readingMonth,
+      action: args.data.action,
+      oldValue: args.data.oldValue,
+      newValue: args.data.newValue,
+      reason: args.data.reason,
+      performedBy: args.data.performedBy,
+      performedAt: new Date(),
+    };
+    mockFtRateHistory.push(row);
+    return row;
+  },
+  async findMany(args: { where: { ftRateId: string }; orderBy?: { performedAt?: "asc" | "desc" } }) {
+    let list = mockFtRateHistory.filter((h) => h.ftRateId === args.where.ftRateId);
+    if (args.orderBy?.performedAt) {
+      const dir = args.orderBy.performedAt === "desc" ? -1 : 1;
+      list = [...list].sort((a, b) => dir * (a.performedAt.getTime() - b.performedAt.getTime()));
+    }
+    return list.map((h) => ({ ...h, performer: mockUsers.find((u) => u.id === h.performedBy)! }));
+  },
+};
+
+const ftDocument = {
+  async create(args: {
+    data: {
+      ftRateId: string;
+      originalName: string;
+      mimeType: string;
+      sizeBytes: number;
+      storagePath: string;
+      uploadedBy: string;
+    };
+  }) {
+    const row: MockFtDocument = {
+      id: newId("ftDocument"),
+      ftRateId: args.data.ftRateId,
+      originalName: args.data.originalName,
+      mimeType: args.data.mimeType,
+      sizeBytes: args.data.sizeBytes,
+      storagePath: args.data.storagePath,
+      uploadedBy: args.data.uploadedBy,
+      uploadedAt: new Date(),
+    };
+    mockFtDocuments.push(row);
+    return row;
+  },
+  async findUnique(args: { where: { id: string } }) {
+    return mockFtDocuments.find((d) => d.id === args.where.id) ?? null;
+  },
+  async delete(args: { where: { id: string } }) {
+    const index = mockFtDocuments.findIndex((d) => d.id === args.where.id);
+    if (index === -1) throw notFoundError();
+    return mockFtDocuments.splice(index, 1)[0];
   },
 };
 
@@ -648,6 +859,9 @@ interface MockPrismaModels {
   readingImage: typeof readingImage;
   syncLog: typeof syncLog;
   billingConfig: typeof billingConfig;
+  ftRate: typeof ftRate;
+  ftRateHistory: typeof ftRateHistory;
+  ftDocument: typeof ftDocument;
 }
 
 type MockPrismaClient = MockPrismaModels & {
@@ -663,6 +877,9 @@ const models: MockPrismaModels = {
   readingImage,
   syncLog,
   billingConfig,
+  ftRate,
+  ftRateHistory,
+  ftDocument,
 };
 
 export const mockPrismaClient: MockPrismaClient = {

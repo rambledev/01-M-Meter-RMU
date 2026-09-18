@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { apiError } from "@/lib/admin/apiResponse";
 import { getOrSeedBillingConfig } from "@/lib/billing/billingConfigServer";
+import { resolveFtForMonth } from "@/lib/billing/ftResolver";
 import { prisma } from "@/lib/db/prisma";
 import { calculateBilling } from "@/lib/export/calculation";
 import { formatReadingPeriod } from "@/lib/admin/period";
@@ -53,16 +54,24 @@ export async function GET(request: Request) {
           orderBy: { readingMonth: "desc" },
         });
 
+  // Each reading resolves Ft for ITS OWN readingMonth (2026-09-17) — never
+  // "the current rate" applied retroactively to every past month.
+  const ftResolutions = await Promise.all(
+    readings.map((r) => resolveFtForMonth(r.readingMonth)),
+  );
+
   const data: ResidentHistoryDTO = {
     room: {
       id: user.residentRoom.id,
       name: user.residentRoom.name,
       zoneName: user.residentRoom.zone.name,
     },
-    readings: readings.map((r) => {
+    readings: readings.map((r, index) => {
       const confirmedValue = toNumberOrNull(r.confirmedValue);
       const previousValue = toNumberOrNull(r.previousReading);
-      const billing = calculateBilling(confirmedValue, previousValue, config);
+      const ftResolution = ftResolutions[index];
+      const resolvedFtRate = ftResolution.found ? ftResolution.ftRate : null;
+      const billing = calculateBilling(confirmedValue, previousValue, config, resolvedFtRate);
       const meterCode = meters.find((m) => m.id === r.meterId)?.code ?? "";
       return {
         id: r.id,

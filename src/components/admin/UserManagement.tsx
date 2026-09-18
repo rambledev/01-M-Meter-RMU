@@ -27,6 +27,7 @@ interface FormState {
   role: RoleValue;
   zoneIds: string[];
   roomId: string;
+  isApproved: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -37,6 +38,7 @@ const EMPTY_FORM: FormState = {
   role: "METER_READER",
   zoneIds: [],
   roomId: "",
+  isApproved: true,
 };
 
 export default function UserManagement() {
@@ -47,6 +49,7 @@ export default function UserManagement() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<UserDTO | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
@@ -83,6 +86,7 @@ export default function UserManagement() {
 
   function openAddModal() {
     setEditingId(null);
+    setEditingUser(null);
     setForm(EMPTY_FORM);
     setFormError(null);
     setModalOpen(true);
@@ -90,6 +94,7 @@ export default function UserManagement() {
 
   function openEditModal(user: UserDTO) {
     setEditingId(user.id);
+    setEditingUser(user);
     setForm({
       name: user.name,
       username: user.username ?? "",
@@ -98,6 +103,7 @@ export default function UserManagement() {
       role: user.role,
       zoneIds: user.responsibleZones.map((z) => z.id),
       roomId: user.residentRoom?.id ?? "",
+      isApproved: user.isApproved,
     });
     setFormError(null);
     setModalOpen(true);
@@ -116,6 +122,15 @@ export default function UserManagement() {
     }));
   }
 
+  // A METER_READER that signed up itself via /login's Google role picker
+  // (src/app/api/auth/register) has an email but no username — same
+  // signal the PATCH route uses server-side. Its email is tied to its
+  // Google identity, so this form never sends username/password for it.
+  const isGoogleMeterReader =
+    editingUser?.role === "METER_READER" &&
+    editingUser.email !== null &&
+    editingUser.username === null;
+
   async function handleSubmit() {
     setBusy(true);
     setFormError(null);
@@ -127,12 +142,15 @@ export default function UserManagement() {
           role: form.role,
           zoneIds: form.zoneIds,
           roomId: form.roomId || undefined,
+          isApproved: form.isApproved,
           ...(isResident
             ? { email: form.email }
-            : {
-                username: form.username,
-                ...(form.password ? { password: form.password } : {}),
-              }),
+            : isGoogleMeterReader
+              ? {}
+              : {
+                  username: form.username,
+                  ...(form.password ? { password: form.password } : {}),
+                }),
         });
       } else {
         await createUser({
@@ -151,6 +169,26 @@ export default function UserManagement() {
       setFormError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Quick one-click approve for a pending self-service signup — keeps
+  // everything else about the account as-is (name/role/zones/room);
+  // "แก้ไข" is still there for an admin who also wants to assign zones
+  // (METER_READER) or a room (RESIDENT) at the same time instead.
+  async function handleApprove(user: UserDTO) {
+    try {
+      await updateUser(user.id, {
+        name: user.name,
+        role: user.role,
+        zoneIds: user.responsibleZones.map((z) => z.id),
+        roomId: user.residentRoom?.id ?? undefined,
+        isApproved: true,
+        ...(user.role === "RESIDENT" ? { email: user.email ?? undefined } : { username: user.username ?? undefined }),
+      });
+      await refresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "อนุมัติไม่สำเร็จ");
     }
   }
 
@@ -191,6 +229,7 @@ export default function UserManagement() {
               <th className="p-2">ชื่อ-สกุล</th>
               <th className="p-2">Username / อีเมล</th>
               <th className="p-2">บทบาท</th>
+              <th className="p-2">สถานะ</th>
               <th className="p-2">โซน/ห้องที่รับผิดชอบ</th>
               <th className="p-2">จำนวนรายการที่บันทึก</th>
               <th className="p-2"></th>
@@ -199,7 +238,7 @@ export default function UserManagement() {
           <tbody>
             {users.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-3 text-center text-zinc-500">
+                <td colSpan={7} className="p-3 text-center text-zinc-500">
                   ยังไม่มีข้อมูลผู้ใช้งาน
                 </td>
               </tr>
@@ -207,8 +246,17 @@ export default function UserManagement() {
             {users.map((user) => (
               <tr key={user.id} className="border-t border-zinc-200 transition-colors hover:bg-emerald-50/60 dark:border-zinc-800 dark:hover:bg-emerald-950/10">
                 <td className="p-2">{user.name}</td>
-                <td className="p-2">{user.role === "RESIDENT" ? user.email ?? "-" : user.username ?? "-"}</td>
+                <td className="p-2">
+                  {user.role === "RESIDENT" ? (user.email ?? "-") : (user.username ?? user.email ?? "-")}
+                </td>
                 <td className="p-2">{ROLE_LABELS[user.role]}</td>
+                <td className="p-2">
+                  {user.isApproved ? (
+                    <span className="text-zinc-500">อนุมัติแล้ว</span>
+                  ) : (
+                    <span className="font-semibold text-amber-700 dark:text-amber-400">รออนุมัติ</span>
+                  )}
+                </td>
                 <td className="p-2">
                   {user.role === "RESIDENT"
                     ? user.residentRoom
@@ -220,6 +268,15 @@ export default function UserManagement() {
                 </td>
                 <td className="p-2">{user.readingCount}</td>
                 <td className="p-2 text-right whitespace-nowrap">
+                  {!user.isApproved && (
+                    <button
+                      type="button"
+                      onClick={() => handleApprove(user)}
+                      className="mr-2 rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+                    >
+                      อนุมัติ
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => openEditModal(user)}
@@ -258,6 +315,10 @@ export default function UserManagement() {
                 placeholder="อีเมล (@rmu.ac.th) — สำหรับเข้าสู่ระบบด้วย Google"
                 className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
               />
+            ) : isGoogleMeterReader ? (
+              <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+                เข้าสู่ระบบด้วย Google: {form.email}
+              </p>
             ) : (
               <>
                 <input
@@ -329,6 +390,22 @@ export default function UserManagement() {
                   </select>
                 )}
               </div>
+            )}
+
+            {editingId && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.isApproved}
+                  onChange={(e) => setForm((f) => ({ ...f, isApproved: e.target.checked }))}
+                />
+                อนุมัติให้ใช้งานแล้ว
+                {!form.isApproved && (
+                  <span className="font-semibold text-amber-700 dark:text-amber-400">
+                    (ยังไม่ได้ติ๊ก = บัญชีนี้ยัง login ไม่ได้)
+                  </span>
+                )}
+              </label>
             )}
 
             {formError && <p className="text-sm font-medium text-red-600">{formError}</p>}

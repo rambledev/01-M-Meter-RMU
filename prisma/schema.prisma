@@ -86,17 +86,21 @@ model ReadingImage {
 }
 
 model User {
-  id               String    @id @default(cuid())
-  name             String
-  username         String?   @unique // nullable: มีความหมายกับ role ADMIN/METER_READER เท่านั้น (login ด้วย username/password)
-  passwordHash     String? // salted scrypt hash (src/lib/admin/password.ts) — never plaintext, never returned by any API
-  email            String?   @unique // nullable: มีความหมายกับ role RESIDENT เท่านั้น (2026-09-09) — login ด้วย Google Sign-In โดเมน @rmu.ac.th เท่านั้น ไม่มี passwordHash
-  role             Role
-  responsibleZones Zone[]    @relation("UserResponsibleZones") // มีความหมายกับ role METER_READER เท่านั้น
-  residentRoomId   String? // มีความหมายกับ role RESIDENT เท่านั้น (2026-09-09) — ห้องเดียวที่มองเห็นข้อมูลได้ ไม่ใช่ many-to-many แบบโซนของผู้จดมิเตอร์ ; อนุญาตหลาย User ต่อ Room เดียวกันได้ (เพื่อนร่วมห้อง) จึงไม่ unique
-  residentRoom     Room?     @relation("ResidentRoom", fields: [residentRoomId], references: [id])
-  readings         Reading[]
-  createdAt        DateTime  @default(now())
+  id                   String          @id @default(cuid())
+  name                 String
+  username             String?         @unique // nullable: มีความหมายกับ role ADMIN/METER_READER เท่านั้น (login ด้วย username/password)
+  passwordHash         String? // salted scrypt hash (src/lib/admin/password.ts) — never plaintext, never returned by any API
+  email                String?         @unique // nullable: มีความหมายกับ role RESIDENT เท่านั้น (2026-09-09) — login ด้วย Google Sign-In โดเมน @rmu.ac.th เท่านั้น ไม่มี passwordHash
+  role                 Role
+  isApproved           Boolean         @default(true) // (2026-09-16) บัญชีที่ Admin สร้างเอง/บัญชีเดิมก่อน migration นี้ = true เสมอ (ไม่กระทบ) — เฉพาะบัญชีที่สมัครเองผ่านหน้า /login ด้วย Google (self-service, เลือกบทบาทเอง) เท่านั้นที่ถูกสร้างด้วยค่า false แล้วรอ Admin กดอนุมัติที่ /admin ก่อนถึงจะ login เข้าใช้งานจริงได้
+  responsibleZones     Zone[]          @relation("UserResponsibleZones") // มีความหมายกับ role METER_READER เท่านั้น
+  residentRoomId       String? // มีความหมายกับ role RESIDENT เท่านั้น (2026-09-09) — ห้องเดียวที่มองเห็นข้อมูลได้ ไม่ใช่ many-to-many แบบโซนของผู้จดมิเตอร์ ; อนุญาตหลาย User ต่อ Room เดียวกันได้ (เพื่อนร่วมห้อง) จึงไม่ unique
+  residentRoom         Room?           @relation("ResidentRoom", fields: [residentRoomId], references: [id])
+  readings             Reading[]
+  ftRatesCreated       FtRate[]        @relation("FtRateCreatedBy") // (2026-09-17) มีความหมายกับ role ADMIN เท่านั้น
+  ftRateHistoryEntries FtRateHistory[] @relation("FtRateHistoryPerformedBy")
+  ftDocumentsUploaded  FtDocument[]    @relation("FtDocumentUploadedBy")
+  createdAt            DateTime        @default(now())
 }
 
 model SyncLog {
@@ -114,9 +118,81 @@ model SyncLog {
 // (src/lib/offline/billingConfigRepository.ts) for use while offline.
 model BillingConfig {
   id             String   @id @default("singleton")
-  ftRate         Float
+  ftRate         Float // (2026-09-17) LEGACY — ไม่ใช้เป็น production source ของ Ft อีกต่อไปหลังเพิ่ม FtRate (รายเดือน) ด้านล่าง คง field ไว้เพื่อ compatibility/ข้อมูลเดิมเท่านั้น ห้ามอ่านค่านี้จาก calculation engine หรือใช้เป็น fallback
   taxRatePercent Float
   baseCharge     Float
   tiers          Json // BillingTier[] — see src/lib/billing/types.ts
+  documentPath   String? // (2026-09-16) หลักฐานประกอบการปรับค่าไฟ — path สัมพัทธ์ เช่น "/upload/doc/xxx.pdf" ไฟล์จริงเก็บที่ public/upload/doc/ (ไม่ได้ commit เข้า git — อยู่ใน .gitignore เดียวกับ /public/upload/ ที่มีอยู่แล้ว) มีได้ไฟล์เดียว ณ เวลาหนึ่ง (แทนที่ของเก่าเมื่ออัปโหลดใหม่)
+  documentName   String? // ชื่อไฟล์เดิมตอนอัปโหลด ใช้แสดงผลเท่านั้น
   updatedAt      DateTime @updatedAt
+}
+
+enum FtStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum FtHistoryAction {
+  CREATE
+  UPDATE
+  DISABLE
+  ENABLE
+}
+
+// Ft (ค่า Ft) — Monthly Rate (2026-09-17), NOT an effective-period/version
+// concept like Tariff could be: exactly one row per calendar month, keyed
+// directly by readingMonth (same "1st of month" convention as
+// Reading.readingMonth — see docs/decision-log.md). Edited in-place
+// (CREATE then UPDATE*), never re-versioned — FtRateHistory below is the
+// append-only audit trail of every change. Production Ft source of truth;
+// BillingConfig.ftRate above is legacy and never read by calculation code.
+model FtRate {
+  id           String          @id @default(cuid())
+  readingMonth DateTime        @db.Date // วันที่ 1 ของเดือนเสมอ เช่น 2026-09-01
+  ftRate       Decimal         @db.Decimal(10, 4)
+  status       FtStatus        @default(ACTIVE)
+  notes        String?
+  createdBy    String
+  creator      User            @relation("FtRateCreatedBy", fields: [createdBy], references: [id])
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  history      FtRateHistory[]
+  documents    FtDocument[]
+
+  @@unique([readingMonth]) // 1 เดือน = 1 Ft record เท่านั้น
+}
+
+// Append-only audit trail — a row is written on every CREATE/UPDATE/DISABLE/
+// ENABLE, never edited or deleted afterward (docs/decision-log.md, Ft
+// History requirement). readingMonth is denormalized from FtRate so history
+// can be queried/displayed without a join.
+model FtRateHistory {
+  id           String          @id @default(cuid())
+  ftRateId     String
+  ftRate       FtRate          @relation(fields: [ftRateId], references: [id])
+  readingMonth DateTime        @db.Date
+  action       FtHistoryAction
+  oldValue     Decimal?        @db.Decimal(10, 4)
+  newValue     Decimal?        @db.Decimal(10, 4)
+  reason       String?
+  performedBy  String
+  performer    User            @relation("FtRateHistoryPerformedBy", fields: [performedBy], references: [id])
+  performedAt  DateTime        @default(now())
+}
+
+// Supporting announcement document(s) for one month's Ft — multiple allowed
+// per FtRate (unlike BillingConfig's single-slot document). Files live on
+// disk under public/upload/doc/ (same convention/validation as the existing
+// billing-config document upload), this table only stores metadata.
+model FtDocument {
+  id           String   @id @default(cuid())
+  ftRateId     String
+  ftRate       FtRate   @relation(fields: [ftRateId], references: [id])
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  storagePath  String // e.g. "/upload/doc/ft_xxx.pdf"
+  uploadedBy   String
+  uploader     User     @relation("FtDocumentUploadedBy", fields: [uploadedBy], references: [id])
+  uploadedAt   DateTime @default(now())
 }

@@ -20,7 +20,7 @@ function reading(overrides: Partial<ReadingForExport> = {}): ReadingForExport {
 
 describe("mapReadingToRow", () => {
   it("maps room/resident/values from the Reading+Meter+Room join", () => {
-    const row = mapReadingToRow(reading(), 1, CONFIG);
+    const row = mapReadingToRow(reading(), 1, CONFIG, 0.5);
 
     expect(row.seq).toBe(1);
     expect(row.roomName).toBe("ห้อง 101");
@@ -30,8 +30,8 @@ describe("mapReadingToRow", () => {
     expect(row.usage).toBe(60);
   });
 
-  it("calls the Calculation Service for billing — usage=60 at the given config", () => {
-    const row = mapReadingToRow(reading(), 1, CONFIG);
+  it("calls the Calculation Service for billing — usage=60 at the given config/resolved Ft", () => {
+    const row = mapReadingToRow(reading(), 1, CONFIG, 0.5);
     // usage=60; baseCharge = 60*2 + 10 = 130; ftCharge = 60*0.5 = 30;
     // tax = (130+30)*10% = 16; total = 130+30+16 = 176
     expect(row.baseCharge).toBe(130);
@@ -45,6 +45,7 @@ describe("mapReadingToRow", () => {
       reading({ confirmedValue: "260.5", previousReading: "200.25" }),
       2,
       CONFIG,
+      0.5,
     );
     expect(row.currentValue).toBe(260.5);
     expect(row.previousValue).toBe(200.25);
@@ -52,7 +53,7 @@ describe("mapReadingToRow", () => {
   });
 
   it("leaves usage and billing null when there is no previous reading", () => {
-    const row = mapReadingToRow(reading({ previousReading: null }), 1, CONFIG);
+    const row = mapReadingToRow(reading({ previousReading: null }), 1, CONFIG, 0.5);
     expect(row.previousValue).toBeNull();
     expect(row.usage).toBeNull();
     expect(row.baseCharge).toBeNull();
@@ -62,7 +63,7 @@ describe("mapReadingToRow", () => {
   });
 
   it("leaves currentValue/usage/billing null when confirmedValue is missing", () => {
-    const row = mapReadingToRow(reading({ confirmedValue: null }), 1, CONFIG);
+    const row = mapReadingToRow(reading({ confirmedValue: null }), 1, CONFIG, 0.5);
     expect(row.currentValue).toBeNull();
     expect(row.usage).toBeNull();
     expect(row.baseCharge).toBeNull();
@@ -73,13 +74,22 @@ describe("mapReadingToRow", () => {
       reading({ meter: { room: { name: "ห้อง 201", residentName: null } } }),
       1,
       CONFIG,
+      0.5,
     );
     expect(row.residentName).toBe("");
   });
 
-  it("uses whatever config is passed in — no formula duplicated here", () => {
-    const otherConfig: BillingConfig = { ...CONFIG, ftRate: 2 };
-    const row = mapReadingToRow(reading(), 1, otherConfig);
-    expect(row.ftCharge).toBe(120); // usage=60 * ftRate=2
+  it("uses whatever resolved Ft rate is passed in — no formula duplicated here", () => {
+    const row = mapReadingToRow(reading(), 1, CONFIG, 2);
+    expect(row.ftCharge).toBe(120); // usage=60 * resolvedFtRate=2
+  });
+
+  it("withholds the whole bill (not just Ft) when Ft is not configured for the month", () => {
+    const row = mapReadingToRow(reading(), 1, CONFIG, null);
+    expect(row.usage).toBe(60); // usage itself is still known
+    expect(row.baseCharge).toBeNull();
+    expect(row.ftCharge).toBeNull();
+    expect(row.tax).toBeNull();
+    expect(row.total).toBeNull();
   });
 });

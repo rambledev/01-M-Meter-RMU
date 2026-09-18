@@ -12,13 +12,30 @@ export default function BillingBreakdownPanel({
   confirmedValue,
   previousReading,
   config,
+  resolvedFtRate,
 }: {
   confirmedValue: number;
   previousReading: number | null;
   config: BillingConfig;
+  // Ft ของเดือนของ reading นี้โดยเฉพาะ (resolve จาก readingMonth เสมอ — ไม่ใช่
+  // Ft ปัจจุบัน) null = ยังไม่ได้กำหนดค่า Ft สำหรับเดือนนี้ (2026-09-17)
+  resolvedFtRate: number | null;
 }) {
   const [open, setOpen] = useState(false);
-  const breakdown = buildBillingBreakdown(confirmedValue, previousReading, config);
+  const breakdown = buildBillingBreakdown(confirmedValue, previousReading, config, resolvedFtRate);
+
+  if (breakdown.ftNotConfigured) {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+          ยังไม่ได้กำหนดค่า Ft สำหรับเดือนนี้
+        </p>
+        <p className="text-xs text-zinc-500">
+          หน่วยที่ใช้: {breakdown.usage ?? "-"} — ระบบยังไม่คำนวณยอดค่าไฟจนกว่าผู้ดูแลระบบจะกำหนดค่า Ft ของเดือนนี้
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -80,7 +97,7 @@ export default function BillingBreakdownPanel({
               <p>รวมค่าไฟพื้นฐาน = {baht(breakdown.baseCharge)} บาท</p>
               <p className="mt-1 font-semibold">ค่า FT:</p>
               <p>
-                {breakdown.usage} × {config.ftRate} = {baht(breakdown.ft)} บาท
+                {breakdown.usage} × {resolvedFtRate} = {baht(breakdown.ft)} บาท
               </p>
               <p className="mt-1 font-semibold">ภาษี:</p>
               <p>

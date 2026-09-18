@@ -1,4 +1,8 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import BillingBreakdownPanel from "@/components/BillingBreakdownPanel";
+import { fetchFtForMonth } from "@/lib/billing/ftApi";
 import type { BillingConfig } from "@/lib/billing/types";
 import { resolveRecorderName } from "@/lib/checker/resolveRecorderName";
 import type { CheckerSession } from "@/lib/checker/types";
@@ -22,6 +26,34 @@ export default function ReadingHistoryList({
   meters: MeterInfo[];
   session: CheckerSession | null;
 }) {
+  // Readings here can span many different months — each one must resolve
+  // Ft for its OWN readingMonth, never one shared "current" value
+  // (2026-09-17). Resolved once per distinct month present in the list.
+  const [ftByMonth, setFtByMonth] = useState<Record<string, number | null>>({});
+  const requestedMonths = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const months = Array.from(new Set(readings.map((r) => toMonthValue(r.readingMonth))));
+    const missing = months.filter((m) => !requestedMonths.current.has(m));
+    if (missing.length === 0) return;
+    for (const m of missing) requestedMonths.current.add(m);
+
+    let cancelled = false;
+    Promise.all(missing.map((m) => fetchFtForMonth(m).then((rate) => [m, rate] as const))).then(
+      (entries) => {
+        if (cancelled) return;
+        setFtByMonth((prev) => {
+          const next = { ...prev };
+          for (const [m, rate] of entries) next[m] = rate;
+          return next;
+        });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [readings]);
+
   if (readings.length === 0) {
     return (
       <p className="text-sm text-zinc-500">ยังไม่มีรายการที่บันทึกในเครื่องนี้</p>
@@ -62,6 +94,7 @@ export default function ReadingHistoryList({
                   confirmedValue={reading.confirmedValue}
                   previousReading={reading.previousReading ?? null}
                   config={billingConfig}
+                  resolvedFtRate={ftByMonth[toMonthValue(reading.readingMonth)] ?? null}
                 />
               </div>
             )}

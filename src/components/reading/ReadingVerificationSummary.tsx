@@ -10,6 +10,7 @@ interface ReadingVerificationSummaryProps {
   usage?: number;
   hasEvidenceImage: boolean;
   billingConfig: BillingConfig | null;
+  resolvedFtRate: number | null;
   errors: string[];
   warnings: string[];
   canSave: boolean;
@@ -30,6 +31,7 @@ export default function ReadingVerificationSummary({
   usage,
   hasEvidenceImage,
   billingConfig,
+  resolvedFtRate,
   errors,
   warnings,
   canSave,
@@ -71,6 +73,7 @@ export default function ReadingVerificationSummary({
               confirmedValue={currentValue}
               previousReading={previousReading ?? null}
               config={billingConfig}
+              resolvedFtRate={resolvedFtRate}
             />
           </div>
         )}

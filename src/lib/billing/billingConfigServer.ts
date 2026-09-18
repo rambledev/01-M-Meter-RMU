@@ -16,12 +16,16 @@ function toBillingConfig(row: {
   taxRatePercent: number;
   baseCharge: number;
   tiers: unknown;
+  documentPath?: string | null;
+  documentName?: string | null;
 }): BillingConfig {
   return {
     ftRate: row.ftRate,
     taxRatePercent: row.taxRatePercent,
     baseCharge: row.baseCharge,
     tiers: row.tiers as BillingTier[],
+    documentPath: row.documentPath ?? null,
+    documentName: row.documentName ?? null,
   };
 }
 
@@ -49,6 +53,29 @@ export async function saveBillingConfig(config: BillingConfig): Promise<BillingC
       baseCharge: config.baseCharge,
       tiers: tiersToJson(config.tiers),
     },
+  });
+  return toBillingConfig(saved);
+}
+
+// Additive — saveBillingConfig() above only ever touches the 4 rate
+// fields, never these two, and vice versa here: uploading/removing the
+// evidence document never touches ftRate/taxRatePercent/baseCharge/tiers.
+// Kept separate on purpose so saving rates can never accidentally wipe the
+// attached document, or vice versa.
+export async function saveBillingConfigDocument(
+  documentPath: string | null,
+  documentName: string | null,
+): Promise<BillingConfig> {
+  const saved = await prisma.billingConfig.upsert({
+    where: { id: SINGLETON_ID },
+    create: {
+      id: SINGLETON_ID,
+      ...DEFAULT_BILLING_CONFIG,
+      tiers: tiersToJson(DEFAULT_BILLING_CONFIG.tiers),
+      documentPath,
+      documentName,
+    },
+    update: { documentPath, documentName },
   });
   return toBillingConfig(saved);
 }

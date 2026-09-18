@@ -43,10 +43,11 @@ export function mapReadingToRow(
   reading: ReadingForExport,
   seq: number,
   config: BillingConfig,
+  resolvedFtRate: number | null,
 ): ExportRow {
   const confirmedValue = toNumberOrNull(reading.confirmedValue);
   const previousReading = toNumberOrNull(reading.previousReading);
-  const billing = calculateBilling(confirmedValue, previousReading, config);
+  const billing = calculateBilling(confirmedValue, previousReading, config, resolvedFtRate);
 
   return {
     seq,

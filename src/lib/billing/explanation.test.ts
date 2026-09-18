@@ -13,9 +13,19 @@ describe("buildBillingExplanation", () => {
 
     const explanation = buildBillingExplanation(config);
 
-    expect(explanation.steps.some((s) => s.includes("0.1234"))).toBe(true);
     expect(explanation.steps.some((s) => s.includes("9%"))).toBe(true);
     expect(explanation.config).toBe(config);
+  });
+
+  it("never interpolates config.ftRate — Ft is a monthly rate, not a config field (2026-09-17)", () => {
+    const explanation = buildBillingExplanation({
+      ftRate: 0.1234,
+      taxRatePercent: 9,
+      baseCharge: 5.5,
+      tiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+    });
+    expect(explanation.steps.some((s) => s.includes("0.1234"))).toBe(false);
+    expect(explanation.steps.some((s) => s.includes("รายเดือน"))).toBe(true);
   });
 
   it("changes when the config changes — not a fixed hard-coded string", () => {

@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import BillingBreakdownPanel from "@/components/BillingBreakdownPanel";
 import BillingExplanation from "@/components/BillingExplanation";
 import MonthYearSelect from "@/components/MonthYearSelect";
 import ResidentAuthGate from "@/components/resident/ResidentAuthGate";
 import { fetchBillingConfig } from "@/lib/billing/billingConfigApi";
+import { fetchFtForMonth } from "@/lib/billing/ftApi";
 import type { BillingConfig } from "@/lib/billing/types";
 import { currentMonthValue } from "@/lib/reading/readingMonth";
 import { fetchResidentHistory } from "@/lib/resident/residentHistoryApi";
@@ -59,6 +59,22 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
   useEffect(() => {
     fetchBillingConfig().then(setBillingConfig);
   }, []);
+
+  // Ft resolved for the selected month specifically (2026-09-17) — the
+  // resident's own history table below already gets its per-reading Ft via
+  // the server route (api/resident/history), this is only for the
+  // recompute-on-the-client detail panel further down.
+  const [resolvedFtRate, setResolvedFtRate] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFtForMonth(monthValue).then((rate) => {
+      if (!cancelled) setResolvedFtRate(rate);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [monthValue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,6 +170,7 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
                           confirmedValue={selectedReading.currentValue}
                           previousReading={selectedReading.previousValue}
                           config={billingConfig}
+                          resolvedFtRate={resolvedFtRate}
                         />
                       </div>
                     )}
@@ -203,10 +220,6 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
           )}
         </>
       )}
-
-      <Link href="/" className="text-center text-xs text-zinc-500 underline">
-        เปลี่ยนบทบาท
-      </Link>
     </div>
   );
 }

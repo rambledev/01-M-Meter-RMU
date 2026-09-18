@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { formatReadingPeriod } from "@/lib/admin/period";
 import { getOrSeedBillingConfig } from "@/lib/billing/billingConfigServer";
+import { resolveFtForMonth } from "@/lib/billing/ftResolver";
 import { prisma } from "@/lib/db/prisma";
 import { calculateBilling } from "@/lib/export/calculation";
 import type {
@@ -63,13 +64,37 @@ export async function GET(request: Request) {
     }),
   ]);
 
+  // Ft resolved once per distinct month present in this result set
+  // (2026-09-17) — each reading then uses ITS OWN month's Ft, never "the
+  // current rate" applied across every month in the trend/zone totals.
+  const distinctMonthKeys = Array.from(
+    new Set(readings.map((r) => r.readingMonth.toISOString())),
+  );
+  const ftByMonthKey = new Map(
+    await Promise.all(
+      distinctMonthKeys.map(async (key) => {
+        const resolution = await resolveFtForMonth(new Date(key));
+        return [key, resolution.found ? resolution.ftRate : null] as const;
+      }),
+    ),
+  );
+
   // Each reading's billing total, computed once via the current config —
   // no separate formula, same Calculation Service every other page uses.
+  // A month with FT_NOT_CONFIGURED contributes 0 to the aggregate totals
+  // below (same "withhold rather than guess" rule as everywhere else —
+  // this only affects the summed KPI numbers, never a per-reading bill
+  // shown as if it were real).
   const readingBilling = readings.map((r) => {
     const usage = toNumberOrNull(r.usage) ?? 0;
+    const resolvedFtRate = ftByMonthKey.get(r.readingMonth.toISOString()) ?? null;
     const billing =
-      calculateBilling(toNumberOrNull(r.confirmedValue), toNumberOrNull(r.previousReading), config)
-        .total ?? 0;
+      calculateBilling(
+        toNumberOrNull(r.confirmedValue),
+        toNumberOrNull(r.previousReading),
+        config,
+        resolvedFtRate,
+      ).total ?? 0;
     return { readingMonth: r.readingMonth, zoneId: r.meter.room.zoneId, usage, billing };
   });
 

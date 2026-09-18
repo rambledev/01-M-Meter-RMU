@@ -62,12 +62,20 @@ export function calculateBaseCharge(
 }
 
 // ค่า FT = หน่วยที่ใช้ × ftRate
+//
+// ftRate is passed in explicitly — resolved per the Reading's own
+// readingMonth by src/lib/billing/ftResolver.ts (2026-09-17: Ft became a
+// Monthly Rate, no longer a field read off BillingConfig). `null` means the
+// month has no configured Ft ("FT_NOT_CONFIGURED") — this function has no
+// notion of "current"/"default"/"previous month" to fall back to; the
+// caller (calculateBilling below) is responsible for withholding the whole
+// bill rather than silently computing ft as 0.
 export function calculateFT(
   usage: number | null,
-  config: BillingConfig,
+  ftRate: number | null,
 ): number | null {
-  if (usage === null) return null;
-  return usage * config.ftRate;
+  if (usage === null || ftRate === null) return null;
+  return usage * ftRate;
 }
 
 // ภาษี = (ค่าไฟพื้นฐาน + ค่า FT) × taxRatePercent
@@ -96,12 +104,21 @@ export interface BillingCalculation {
   ft: number | null; // ค่า FT
   tax: number | null; // ภาษี
   total: number | null; // รวมทั้งสิ้น
+  // true เมื่อรู้ usage แล้วแต่ยังไม่มี Ft ของเดือนนั้น (FT_NOT_CONFIGURED) —
+  // ต่างจาก usage === null (ยังไม่รู้ usage เลย) ธงนี้บอกสาเหตุที่บิลทั้งชุด
+  // ถูกงดแสดงว่าเป็นเพราะ "ไม่มี Ft" ไม่ใช่ "ไม่มี previousReading"
+  ftNotConfigured: boolean;
 }
 
 // No previousReading -> calculateUsage returns null -> the whole bill is
 // null (Phase 6B kickoff §4: "ห้ามเดาค่า previous"; a partial bill built on
 // an unknown usage would be misleading, so it is withheld entirely rather
-// than only zeroing the usage-dependent fields).
+// than only zeroing the usage-dependent fields). Same principle applied
+// 2026-09-17 to a month with no configured Ft: `resolvedFtRate` is
+// whatever src/lib/billing/ftResolver.ts resolved for THIS reading's own
+// readingMonth (never "current"/"latest"/any other month) — null means not
+// configured, and the whole bill is withheld (ftNotConfigured: true)
+// instead of silently computing a partial/misleading total.
 //
 // Values are returned at full precision — round only when displaying
 // (Phase 6B kickoff §5: "อย่าปัดค่ากลางโดยไม่จำเป็น").
@@ -109,16 +126,20 @@ export function calculateBilling(
   confirmedValue: number | null,
   previousReading: number | null,
   config: BillingConfig,
+  resolvedFtRate: number | null,
 ): BillingCalculation {
   const usage =
     confirmedValue !== null ? calculateUsage(confirmedValue, previousReading) : null;
   if (usage === null) {
-    return { usage: null, baseCharge: null, ft: null, tax: null, total: null };
+    return { usage: null, baseCharge: null, ft: null, tax: null, total: null, ftNotConfigured: false };
+  }
+  if (resolvedFtRate === null) {
+    return { usage, baseCharge: null, ft: null, tax: null, total: null, ftNotConfigured: true };
   }
 
   const baseCharge = calculateBaseCharge(usage, config);
-  const ft = calculateFT(usage, config);
+  const ft = calculateFT(usage, resolvedFtRate);
   const tax = calculateTax(baseCharge, ft, config);
   const total = calculateTotal(baseCharge, ft, tax);
-  return { usage, baseCharge, ft, tax, total };
+  return { usage, baseCharge, ft, tax, total, ftNotConfigured: false };
 }

@@ -989,3 +989,125 @@ Phase 0 (Project Setup) เสร็จแล้ว รายการนี้�
 **ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (164 tests), `npm run build` ผ่านทั้งหมด — **รอผู้ใช้ทดสอบซ้ำกับภาพมิเตอร์จริงเพื่อยืนยันว่า confidence ไม่ค้างที่ 0% อีกต่อไป**
 
 **สถานะ**: 🟡 แก้ตามหลักฐานแล้ว รอ real-device re-test ยืนยันผล — ถ้ายังไม่หาย ขั้นต่อไปคือลอง `OEM.TESSERACT_ONLY` (legacy engine ที่รองรับ whitelist ได้ดีกว่า แลกกับความแม่นยำที่อาจต่ำลง) หรือปรับ `previewConfidence`/`stableConfidence` ใน `lib/calibration/config.ts` ตามค่า confidence จริงที่วัดได้
+
+(อัปเดต 2026-09-16: ทดสอบซ้ำจริงแล้ว — value อ่านถูกต้อง "2318" หลังแก้, confidence ขึ้นจาก 0% เป็น 50% แต่ยังต่ำกว่า `previewConfidence` เดิม (60%) จึงปรับค่าเป็น 0.45 ตามข้อมูลจริง — บันทึกไว้ใน `docs/meter-calibration.md`)
+
+---
+
+## ✅ Google login แบบรวมทุก role + workflow อนุมัติจาก Admin (2026-09-16)
+
+**บริบท**: เดิม Google login (@rmu.ac.th) ล็อกไว้เฉพาะ RESIDENT เท่านั้น (auto-provision ทันทีไม่ต้องรออนุมัติ) ส่วน ADMIN/METER_READER ใช้ username/password แยกต่างหาก — ผู้ใช้ขอให้หน้า "ข้อมูลผู้ใช้งาน" ของ Admin กำหนดบทบาทให้ user ที่ login ผ่าน Gmail ได้ ถามยืนยันขอบเขตแล้วสรุปเป็น: อีเมลใหม่ที่ยังไม่เคยมีในระบบ ต้องเลือกบทบาทเอง (ผู้จดมิเตอร์ หรือ ผู้พักอาศัย เท่านั้น — ไม่มี Admin ให้เลือก) แล้ว **รอ Admin อนุมัติ** ก่อนถึงจะ login ใช้งานได้จริง
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| เพิ่ม `User.isApproved Boolean @default(true)` (migration `20260916034805_add_user_approval_status`, apply กับ PostgreSQL production แล้ว) | Default `true` ทำให้บัญชีเดิมทั้งหมด + บัญชีที่ Admin สร้างเองในอนาคตไม่ถูกกระทบเลย (ยัง login ได้ปกติทันที) — เฉพาะบัญชีที่สมัครเองผ่าน Google เท่านั้นที่ถูกสร้างด้วย `false` explicit แล้วรออนุมัติ |
+| สร้างหน้า `/login` ใหม่ (ไม่ต่อยอดจาก `/resident` เดิม) เป็นทางเข้ากลางสำหรับทุก role | ยืนยันจากผู้ใช้โดยตรง — `/resident` เดิมมี Google button ของตัวเองอยู่แล้วสำหรับ resident เท่านั้น ส่วน checker ไม่เคยมี Google option เลย จึงต้องมีทางเข้าใหม่ที่ไม่ผูกกับ role ใด role หนึ่ง |
+| Endpoint ใหม่ `/api/auth/login` (verify+lookup, คืน status `new/pending/resident/checker/admin`) และ `/api/auth/register` (สร้างบัญชีใหม่ `isApproved:false`) แยกจาก `/api/resident/google-login` เดิมโดยสิ้นเชิง | ไม่แตะ endpoint เดิมที่ resident ใช้งานจริงอยู่แล้ว (ผ่านการทดสอบมาหลายรอบ) — เพิ่มเส้นทางใหม่แทนการยัดทุก role เข้า endpoint เดียวที่ resident พึ่งพาอยู่ |
+| `/api/auth/register` **รับเฉพาะ role METER_READER/RESIDENT** — ปฏิเสธค่าอื่นเสมอ (hardcode) | ป้องกันไม่ให้ self-service สมัครเป็น ADMIN ได้เองเด็ดขาด — ช่องโหว่ร้ายแรงถ้าไม่ล็อกจุดนี้ เพราะแค่มีอีเมล @rmu.ac.th ไม่ควรพอจะได้สิทธิ์ผู้ดูแลระบบ |
+| แก้ `/api/resident/google-login` เดิม: อีเมลใหม่ที่ไม่เคยมีในระบบตอนนี้สร้างด้วย `isApproved:false` และ**ไม่ login ให้ทันที** (เดิม auto-provision แล้วเข้าได้เลย) | **เปลี่ยน behavior เดิมจริง** — ต้องแจ้งผู้ใช้ตรงๆ: resident สมัครใหม่จะช้าลง (ต้องรอ Admin) แต่เป็นไปตาม policy ใหม่ที่ผู้ใช้ยืนยันชัดเจนว่าต้องการให้ทุก role ใหม่ผ่านการอนุมัติเหมือนกันหมด ไม่ใช่แค่ checker |
+| Admin's `PATCH /api/admin/users/[id]` ผ่อนคลาย: METER_READER ที่มี `email` แต่ `username=null` (สมัครเองผ่าน Google) ไม่ต้องกรอก username/password — ใช้ email เดิมที่ผูกกับ Google identity แทน | จำเป็นเพื่อให้ Admin แก้ไข/อนุมัติ checker ที่สมัครผ่าน Google ได้จริงผ่านฟอร์มแก้ไขเดิม — ไม่งั้น validation เดิม (บังคับ username เสมอสำหรับ non-resident) จะบล็อกไม่ให้บันทึกได้เลย |
+| เพิ่ม `isApproved` เป็น optional field ในฟอร์มแก้ไขเดิม (ไม่สร้าง endpoint/modal แยกต่างหาก) + ปุ่ม "อนุมัติ" แบบกดเดียวในตาราง (เรียก `updateUser` เดิมพร้อม `isApproved:true`) | Reuse ฟอร์ม/endpoint ที่มีอยู่แล้วทั้งหมด — Admin อนุมัติ + กำหนดโซน (สำหรับ METER_READER) หรือห้อง (สำหรับ RESIDENT) ได้ในการบันทึกครั้งเดียว ไม่ต้องสร้าง UI ใหม่ซ้ำซ้อน |
+| Mock layer (`mockStore.ts`/`mockPrisma.ts`) อัปเดตให้รองรับ `isApproved` ครบ (`MOCK_DATA=true` ยังใช้งานได้ปกติ) | รักษาความสอดคล้องกับ schema จริง — บัญชี demo เดิมทั้งสอง (`checker-demo`, resident demo) ตั้ง `isApproved:true` ไม่กระทบการ demo เดิม |
+| เพิ่มลิงก์ "สมัครสมาชิกใหม่/เข้าสู่ระบบด้วย Google" ที่หน้าแรก (`/`) และในหน้า login ของ checker (`CheckerAuthGate.tsx`) ชี้ไปที่ `/login` | ถ้าไม่มีจุดเชื่อมไปหน้าใหม่เลย ผู้ใช้จริงจะหาไม่เจอ (โดยเฉพาะ checker ที่เดิมมีแต่ฟอร์ม username/password ไม่มีทางสมัครเองได้เลย) |
+
+**ผลกระทบต่อของเดิม**: `saveOfflineReading()`/reading workflow/billing **ไม่ถูกแตะเลย** (คนละส่วนกับงานนี้) — `/api/checker/login` (username/password เดิม) และ `/resident`'s inline Google button **ยังทำงานเหมือนเดิมทุกประการสำหรับบัญชีที่ approved อยู่แล้ว** มีแค่ resident สมัครใหม่เท่านั้นที่ behavior เปลี่ยน (ตามที่ระบุด้านบน)
+
+**ไฟล์ใหม่**: `prisma/migrations/20260916034805_add_user_approval_status/`, `src/app/api/auth/{login,register}/route.ts`, `src/app/login/page.tsx`, `src/lib/auth/authApi.ts`
+**ไฟล์ที่แก้**: `prisma/schema.prisma`, `src/app/api/resident/google-login/route.ts`, `src/app/api/admin/users/route.ts`, `src/app/api/admin/users/[id]/route.ts`, `src/lib/admin/types.ts`, `src/lib/admin/adminApi.ts`, `src/components/admin/UserManagement.tsx`, `src/lib/db/mockStore.ts`, `src/lib/db/mockPrisma.ts`, `src/app/page.tsx`, `src/components/checker/CheckerAuthGate.tsx`
+
+**ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (201 tests — ไม่มี regression, ยังไม่ได้เพิ่ม test ใหม่สำหรับ feature นี้เพราะ API routes เหล่านี้ไม่มี pattern การเทสในโปรเจกต์นี้มาก่อน ต้องพึ่ง PostgreSQL จริง), `npm run build` ผ่านทั้งหมด — Migration apply กับ production DB จริงสำเร็จ (`ALTER TABLE "User" ADD COLUMN "isApproved" BOOLEAN NOT NULL DEFAULT true`)
+
+**Known gap**: ยังไม่มีการทดสอบจริงผ่าน browser (ไม่มี headless browser ในสภาพแวดล้อมนี้เหมือนทุกรอบ) — โดยเฉพาะ flow เต็ม (`/login` → เลือกบทบาท → รออนุมัติ → Admin กดอนุมัติ → login ได้จริง) ยังไม่ได้ verify end-to-end ด้วยบัญชี Google จริง
+
+**สถานะ**: ✅ Implementation เสร็จ, migration apply กับ production แล้ว — รอทดสอบจริงกับบัญชี Google จริงเพื่อยืนยัน flow ทั้งหมด
+
+---
+
+## ✅ อัปโหลดหลักฐานปรับค่าไฟ ที่แท็บ "ตั้งค่าค่าไฟ" (2026-09-16)
+
+**บริบท**: ผู้ใช้ขอให้เพิ่มส่วนอัปโหลดไฟล์หลักฐานประกอบการปรับค่าไฟที่ Admin tab "ตั้งค่าค่าไฟ" โดยระบุ path เก็บไฟล์เป็น `public/upload/doc`
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| เพิ่ม `BillingConfig.documentPath`/`documentName` (String? ทั้งคู่, migration `20260916040600_add_billing_config_document` apply กับ production แล้ว) — เก็บได้ **ไฟล์เดียว ณ เวลาหนึ่ง** (อัปโหลดใหม่แทนที่ของเก่า) ไม่ทำเป็นตารางประวัติ | ผู้ใช้ขอสั้นๆ ไม่ได้ระบุว่าต้องเก็บประวัติหลายไฟล์ — เลือกแบบง่ายที่สุดที่ตรงกับคำขอ ไม่ over-engineer เป็น version history ที่ไม่ได้ขอ |
+| ใช้ pattern เดียวกับภาพมิเตอร์ (`public/upload/<subfolder>/`, `mkdir`+`writeFile`, DB เก็บ path สัมพัทธ์) — path ที่ผู้ใช้ระบุ (`public/upload/doc`) ตรงกับ `.gitignore` เดิม (`/public/upload/`) พอดีอยู่แล้ว ไม่ต้องแก้ `.gitignore` | Reuse convention ที่มีอยู่แล้วจาก `src/app/api/readings/sync/route.ts` แทนการคิด pattern ใหม่ |
+| แยกฟังก์ชัน `saveBillingConfigDocument()` ใหม่ใน `billingConfigServer.ts` **ไม่แตะ** `saveBillingConfig()` เดิมเลย (ฟังก์ชันเดิมยังอัปเดตแค่ 4 field อัตราค่าไฟเท่านั้น) | ป้องกัน race ระหว่างบันทึกอัตราค่าไฟกับอัปโหลด/ลบไฟล์หลักฐานไม่ให้ล้างค่ากันเอง — ทดสอบจริงแล้ว (curl ต่อ production DB จริง): อัปโหลดไฟล์แล้วบันทึกอัตราใหม่ → เอกสารยังอยู่; บันทึกอัตราแล้วอัปโหลดไฟล์ → อัตราไม่เปลี่ยน |
+| **พบและแก้บั๊กจริงใน mock layer**: `mockPrisma.ts`'s `billingConfig.upsert` เดิม reconstruct ทั้ง row จาก `update` object โดยไม่ merge กับของเดิม — ถ้าเรียกแบบ document-only (ไม่ส่ง ftRate/taxRatePercent/baseCharge/tiers มาด้วย) จะได้ `undefined` ทับค่าจริงทันทีตอน `MOCK_DATA=true` | แก้เป็น merge-onto-existing-row (behavior แบบเดียวกับ Prisma `update` จริง) — เป็นบั๊ก pre-existing ที่ไม่เคยโดนพบเพราะไม่เคยมี caller ไหนเรียก `upsert` แบบ partial fields มาก่อนจนกระทั่งงานนี้ |
+| Validate ชนิดไฟล์แบบ whitelist (`application/pdf`, `image/jpeg`, `image/png`, `image/webp`) + จำกัดขนาด 10MB | หลักฐานปรับค่าไฟตามธรรมชาติเป็นเอกสารราชการ/ประกาศ (PDF) หรือภาพถ่ายประกาศ — ไม่มีเหตุผลต้องรับไฟล์ประเภทอื่น |
+
+**ผลกระทบต่อของเดิม**: **ไม่มี** — `saveBillingConfig()`/`updateBillingConfig()` เดิม, billing calculation (`breakdown.ts`), และทุกจุดที่ใช้ `BillingConfig` (checker reading page, resident history) ไม่ถูกแตะเลย field ใหม่เป็น optional ทั้งคู่
+
+**ไฟล์ใหม่**: `prisma/migrations/20260916040600_add_billing_config_document/`, `src/app/api/admin/billing-config/document/route.ts`
+**ไฟล์ที่แก้**: `prisma/schema.prisma`, `src/lib/billing/types.ts`, `src/lib/billing/billingConfigServer.ts` (เพิ่ม fn ใหม่, ของเดิมไม่แตะ), `src/lib/admin/adminApi.ts` (เพิ่ม fn ใหม่), `src/components/admin/BillingSettingsManagement.tsx`, `src/lib/db/mockStore.ts`/`mockPrisma.ts` (รวมถึงแก้บั๊ก upsert เดิม)
+
+**ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (201 tests), `npm run build` ผ่านทั้งหมด — **ทดสอบจริงผ่าน `curl` ต่อ dev server + PostgreSQL production จริง** (ครั้งแรกในหลายๆ งานที่ทำได้ เพราะเป็น API route ล้วนไม่ต้องพึ่ง browser): อัปโหลดไฟล์จริงสำเร็จ, ไฟล์เก่าถูกลบตอนอัปโหลดไฟล์ใหม่, DELETE ลบไฟล์+ล้างค่าถูกต้อง, ปฏิเสธไฟล์ประเภทที่ไม่อนุญาตถูกต้อง, บันทึกอัตราค่าไฟไม่ล้างเอกสารและอัปโหลดเอกสารไม่ล้างอัตรา — ยืนยันครบตามที่ออกแบบ, ล้างข้อมูลทดสอบออกจาก production แล้ว (คืนค่าอัตราเดิม, ลบไฟล์ทดสอบ)
+
+**Known gap**: ยังไม่ได้ทดสอบ UI จริงผ่าน browser (ปุ่มอัปโหลด/ลบ/แสดงลิงก์ไฟล์ในหน้า Admin) — ทดสอบเฉพาะ API layer ตรงๆ
+
+**สถานะ**: ✅ Implementation เสร็จ + ทดสอบ API จริงผ่านหมดแล้ว
+
+---
+
+## ✅ ปรับหน้าแรกใหม่: Google login เป็นทางเข้าเดียว, ตัดหน้าเลือกบทบาทแบบ static ออก (2026-09-16)
+
+**บริบท**: ผู้ใช้ขอปรับหน้าแรก (`/`) — เปลี่ยนชื่อระบบ, ตัดส่วน "บทบาทการใช้งาน" (การ์ด 4 role เดิม) ออก, ย้าย Google login (@rmu.ac.th) มาไว้ที่หน้าแรกโดยตรงแทน
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| ย้าย logic ทั้งหมดจากหน้า `/login` (สร้างไว้เมื่อวานตอนทำ Google login แบบรวม role) มาไว้ที่ `/` โดยตรง แล้ว**ลบหน้า `/login` ทิ้ง** | หน้าแรกกับหน้า login ทำหน้าที่ซ้ำกันทันทีที่ผู้ใช้ขอให้หน้าแรกมี Google login เอง — เก็บไว้ 2 หน้าจะสับสนว่าให้เข้าทางไหน ลบ `/login` เพราะเพิ่งสร้างเมื่อวาน ยังไม่มีใครอ้างอิง URL นี้จากภายนอก ลบได้อย่างปลอดภัย |
+| ชื่อระบบใหม่ "ระบบบริหารจัดการค่าสาธารณูปโภค" + "กลุ่มงานอาคารสถานที่และบริการ" แทน "DEMO ระบบเก็บมิเตอร์ไฟฟ้า 2569" | ตามที่ผู้ใช้ระบุตรงตัว |
+| ข้อความ "อนุญาตเฉพาะอีเมลที่ลงท้ายด้วย @rmu.ac.th เท่านั้น" ใส่ไว้ชัดเจนเป็นสีเหลือง/ตัวหนา แยกจากข้อความอื่น | ตามคำสั่ง "มีข้อความระบุชัดเจน" |
+| ไม่แตะ `/resident`'s inline Google button เดิม, `/api/auth/{login,register}`, workflow อนุมัติจาก Admin | เป็นแค่การย้าย UI entry point ไม่ใช่เปลี่ยน business logic ของ auth/approval ที่เพิ่งสร้างไว้เมื่อวาน |
+| อัปเดตลิงก์ "สมัครสมาชิกใหม่" ใน `CheckerAuthGate.tsx` จาก `/login` → `/` | จุดเดียวในโค้ดที่อ้างอิง `/login` เดิม (grep ยืนยันแล้ว) |
+
+**ผลกระทบต่อของเดิม**: ไม่มี — Component/logic ที่ย้ายมาเป็นโค้ดเดิมทั้งหมดจากงานเมื่อวาน (Google login แบบรวม role), แค่เปลี่ยนตำแหน่งที่ render และข้อความ ไม่กระทบ reading workflow/billing/OCR
+
+**ไฟล์ที่แก้**: `src/app/page.tsx` (เขียนใหม่ทั้งไฟล์ — ย้าย logic จาก `/login`), `src/components/checker/CheckerAuthGate.tsx` (แก้ลิงก์)
+**ไฟล์ที่ลบ**: `src/app/login/page.tsx`
+
+**ทดสอบ**: `npx tsc --noEmit`, `npm run lint`, `npm test` (201 tests), `npm run build` ผ่านทั้งหมด — smoke test จริงผ่าน dev server: หน้าแรกแสดงชื่อระบบใหม่ถูกต้อง, ไม่มีคำว่า "บทบาทการใช้งาน" หลงเหลือ (ยืนยันว่าการ์ด role เดิมถูกตัดออกจริง), มีข้อความ @rmu.ac.th, `/login` คืน 404 แล้ว (ลบสำเร็จจริง)
+
+**Known gap**: ยังไม่ได้ทดสอบ flow เต็มผ่าน browser จริงด้วยบัญชี Google จริง (ข้อจำกัดเดิม ไม่มี headless browser ในสภาพแวดล้อมนี้) — โดยเฉพาะการกดปุ่ม Google/เลือกบทบาท/เห็นข้อความรออนุมัติจริงบนหน้าจอ
+
+**สถานะ**: ✅ Implementation เสร็จ, สโมคเทสต์ผ่าน dev server ยืนยันเนื้อหาถูกต้อง — รอทดสอบจริงกับบัญชี Google จริง
+
+---
+
+## ✅ Ft (ค่า Ft) กลายเป็น Monthly Rate — Implementation Decisions (2026-09-17)
+
+**บริบท**: ผู้ใช้สั่งให้ปรับ Ft จากฟิลด์เดียวใน `BillingConfig` (singleton, ไม่มี concept ของเดือน) ให้เป็น "Monthly Rate" ผูกกับ `readingMonth` โดยตรง — 1 เดือน = 1 ค่า Ft เท่านั้น ห้ามใช้ effectiveFrom/effectiveTo/date range กับ Ft โดยเด็ดขาด (ต่างจาก Tariff ที่ยังเป็น concept แยกและอาจ versioned แบบ effective period ได้ในอนาคต) พร้อม audit history, เอกสารประกอบ, และห้าม fallback ไปยัง Ft เดือนอื่น/ค่า default/0 เมื่อไม่มี Ft ของเดือนนั้น
+
+| การตัดสินใจ | เหตุผล |
+|---|---|
+| `FtRate` model ใหม่ 1 แถวต่อเดือน (`@@unique([readingMonth])`), แก้ไขแบบ **in-place** (ไม่สร้าง version ใหม่) | ตัวอย่าง audit trail ที่ผู้ใช้ให้มา (09/2569: CREATE → UPDATE → UPDATE) แสดงว่าเป็น 1 record ที่ถูกแก้ไขซ้ำ ไม่ใช่หลาย version — action `UPDATE` เก็บ oldValue/newValue ใน `FtRateHistory` แทน |
+| `FtRateHistory` แยกเป็นตาราง append-only ต่างหาก, เขียนทุก action (CREATE/UPDATE/DISABLE/ENABLE) ใน `prisma.$transaction` เดียวกับการแก้ `FtRate` | ตรงคำสั่ง "ห้ามเกิดข้อมูล Ft เปลี่ยนแต่ไม่มี audit history" — ถ้า insert history fail ทั้ง transaction rollback ทดสอบจริงแล้วว่า history มีครบทุก action ตามลำดับ |
+| DISABLE/ENABLE เขียน history โดย `oldValue === newValue` (ค่า Ft เดิม ไม่เปลี่ยน) | สถานะเปลี่ยนแต่ค่าไม่เปลี่ยน — เลือก representation นี้เพื่อให้อ่าน history แล้วแยกออกจาก UPDATE (ซึ่ง old≠new) ได้ทันที ตามที่คำสั่งให้ "เลือก representation ที่สม่ำเสมอและ document ไว้" |
+| `ftRate: Decimal @db.Decimal(10,4)` ใน DB, แปลงเป็น `number` ที่จุดเดียวใน `ftResolver.ts` (ผ่าน `Number(row.ftRate)` ไม่ใช่ `.toNumber()`) | ตรงคำสั่ง "ห้ามใช้ Float สำหรับค่าทางการเงิน" ในชั้น storage แต่ "ห้าม rewrite calculation engine ทั้งระบบเป็น Decimal-native" — `Number()` แทน `.toNumber()` เพื่อให้ compatible กับ `mockPrisma.ts` (MOCK_DATA=true) ที่เก็บเป็น plain number อยู่แล้ว ตรงรูปแบบเดิมของ `src/lib/export/mapReadingToRow.ts` |
+| `calculateFT`/`calculateBilling` (`src/lib/export/calculation.ts`) เปลี่ยน signature รับ `resolvedFtRate: number \| null` ตรงๆ แทนการอ่าน `config.ftRate` | ตัดการพึ่งพา `BillingConfig.ftRate` ออกจาก calculation engine ทั้งหมด — ป้องกัน fallback ไปยังค่าเดิมโดยไม่ตั้งใจ (ตรงคำสั่ง "ห้าม fallback ไป BillingConfig.ftRate") `BillingCalculation` เพิ่ม field `ftNotConfigured: boolean` เพื่อแยกเหตุผลที่บิลถูกงด (ไม่มี Ft vs ไม่มี previousReading) |
+| `resolveFtForMonth(readingMonth)` ใน `ftResolver.ts` เป็นจุดเดียวที่อ่าน Ft — query แบบ exact equality (`readingMonth` + `status=ACTIVE`) ไม่ใช่ date range, ไม่มี fallback ใดๆ | ตรงคำสั่งข้อ 5–6 เป๊ะ ("ห้าม query แบบ date range", "ห้าม fallback") — ทุก consumer (checker/reading, resident/history, executive/summary, export, BillingBreakdownPanel) เรียกฟังก์ชันเดียวกันนี้ (โดยตรงฝั่ง server, ผ่าน `GET /api/billing/ft/current` ใหม่ฝั่ง client) ไม่มีสูตร Ft ที่สอง |
+| Client-side ที่แสดงบิล (checker/reading, resident/page, ReadingHistoryList) resolve Ft ผ่าน `fetchFtForMonth()` ตาม readingMonth ของ reading นั้นๆ โดยเฉพาะ — `ReadingHistoryList` resolve เป็น map แยกต่อเดือนเพราะ 1 หน้าจอแสดงหลาย reading คนละเดือนได้ | ป้องกัน bug เดิมที่พบระหว่างตรวจสอบ (resident/history และ executive/summary เดิมใช้ `getOrSeedBillingConfig()` ตัวเดียวกับทุก reading — เท่ากับใช้อัตราปัจจุบันย้อนหลังกับทุกเดือน) — แก้ทั้งฝั่ง server (resolve ต่อ reading/ต่อเดือนที่ query) และฝั่ง client (fetch ต่อเดือนที่กำลังแสดง) |
+| Server-side authorization ใหม่ (`requireAdmin.ts`) เฉพาะ endpoint `/api/admin/ft/**` เท่านั้น — client ส่งแค่ opaque `x-admin-id` (จาก `adminSession.ts`, บันทึกตอน login Google สำเร็จเป็น role admin) เซิร์ฟเวอร์ query role จริงจาก DB ทุกครั้ง ไม่เชื่อ role จาก client | ระบบเดิมไม่มี server-side auth เลยแม้แต่ที่เดียว (ยืนยันด้วยการตรวจโค้ดจริง — ทุก route "client-gated only") — เพิ่มเฉพาะจุดที่จำเป็นต่องานนี้ ไม่แตะ authorization ของ route อื่นตามคำสั่ง ไม่สร้างระบบ auth ใหม่ (reuse pattern เดิม: opaque id คืนตอน login, เก็บ localStorage, ไม่มี cookie/JWT เหมือนเดิมทั้งระบบ) |
+| Document (`FtDocument`) รองรับหลายไฟล์ต่อ 1 เดือน, reuse validation pattern (MIME whitelist จริง, 10MB, unique filename) จาก `api/admin/billing-config/document/route.ts` เป๊ะ | ต่างจาก `BillingConfig.documentPath` เดิมที่มีได้ไฟล์เดียว — Ft แต่ละเดือนอาจมีประกาศหลายฉบับ ไฟล์ถูกลบทิ้งถ้า metadata insert fail (ไม่ทิ้ง orphan file) |
+| `BillingConfig.ftRate` **ไม่ถูกลบ ไม่ migrate ค่าไปยังเดือนเก่า** — คงไว้เป็น legacy field เฉยๆ, เพิ่มข้อความเตือนในหน้า "ตั้งค่าค่าไฟ" เดิมว่าไม่ใช้คำนวณแล้ว | ตรงคำสั่งข้อ "IMPORTANT DATA CONDITION" เป๊ะ — ข้อมูลจริงใน production มี Reading 4 เดือน (06–09/2569) ที่จะไม่มี Ft ทันทีหลัง deploy (ตรวจสอบแล้วว่าเป็น production DB จริงที่ 202.29.22.92:8024) เป็น behavior ที่ตั้งใจ ไม่ backfill ด้วย 0.0972 ตามคำสั่ง |
+
+**Database migration**: `20260917064302_add_ft_rate_monthly` — additive ล้วน (`CREATE TABLE FtRate/FtRateHistory/FtDocument` + 2 enum ใหม่ + FK ไป `User`) ไม่มี `ALTER`/`DROP` ใดๆ ต่อตารางเดิม รันสำเร็จบน PostgreSQL จริงแล้ว (`npx prisma migrate dev`)
+
+**Mock layer**: เพิ่ม `ftRate`/`ftRateHistory`/`ftDocument` ใน `mockPrisma.ts`/`mockStore.ts` ให้ครบ (merge/unique-constraint semantics ตรงกับของจริง) เผื่อ `MOCK_DATA=true` ถูกใช้ในอนาคต — สภาพแวดล้อมนี้ `MOCK_DATA=false` (ต่อ DB จริง) จึงไม่ได้ใช้ path นี้ระหว่างทดสอบ
+
+**ทดสอบ**:
+- `npx tsc --noEmit`, `npx eslint .`, `npm test` (221 tests ผ่านทั้งหมด รวม 12 test ใหม่ของ `ftValidation.test.ts`, 3 ของ `ftResolver.test.ts`, และ test ที่ปรับ signature ใน `calculation.test.ts`/`breakdown.test.ts`/`mapReadingToRow.test.ts`/`explanation.test.ts`), `npm run build` — ผ่านทั้งหมด
+- ทดสอบจริงผ่าน dev server ต่อ PostgreSQL จริง (curl + node script, สร้าง Ft เดือนทดสอบ 2099-01 ที่ไม่ชนกับข้อมูลจริง): 401 ไม่มี session, 403 non-admin, 200 admin สร้าง Ft สำเร็จ, 409 ซ้ำเดือน, PUT แก้ไขค่าสำเร็จพร้อม history UPDATE ถูกต้อง (old=0.1623,new=0.1972), disable→resolve เป็น found:false ทันที (ยืนยันไม่มี fallback), enable→กลับมา found:true, ประวัติครบ 4 action ตามลำดับ, อัปโหลด/ลบเอกสารสำเร็จและไฟล์บนดิสก์ถูกลบจริง, non-admin ถูกบล็อกจาก disable (403)
+- ยืนยันว่าเดือนจริงที่มีอยู่ (06–09/2569, มี Reading จริง 26 แถว) resolve เป็น `found:false` ถูกต้อง — `executive/summary` คืน `totalBilling: 0` ทุกเดือน (ไม่ fabricate), `resident/history` คืน `usage` ที่รู้จริงแต่ `billing.total: null`, Excel export (`/api/export?month=2026-07`) แสดงคอลัมน์ usage จริง (134/178/110) แต่คอลัมน์ค่าไฟทั้งหมดเป็น "-" — ยืนยันว่า usage ถูกคำนวณได้ปกติแต่บิลถูกงดทั้งชุดเพราะไม่มี Ft เท่านั้น ไม่ใช่ bug อื่น
+- ลบข้อมูลทดสอบทั้งหมดหลังทดสอบ (FtRate/FtRateHistory/FtDocument ของเดือน 2099-01, ไฟล์เอกสารทดสอบ, บัญชี Admin ทดสอบชั่วคราว) — ยืนยันว่า Reading เดิม 26 แถวและ `BillingConfig` เดิม (`ftRate: 0.0972`) ไม่ถูกแตะต้องเลย
+
+**Known limitations**:
+- Production DB มี Reading 4 เดือน (06–09/2569) ที่ยังไม่มี Ft — resident/checker/executive จะแสดง "ยังไม่ได้กำหนดค่า Ft สำหรับเดือนนี้"/ยอดว่างจนกว่า Admin จะกำหนด Ft ย้อนหลังให้ครบผ่านแท็บ "ค่า Ft" (ตั้งใจตามคำสั่ง ไม่ใช่บั๊ก)
+- `public/upload/` (ทั้งรูปมิเตอร์และเอกสาร Ft/BillingConfig) ยังไม่ได้ mount เป็น Docker volume ใน `docker-compose.yml` — ปัญหาเดิมที่เคยรายงานไว้ก่อนหน้านี้ ยังไม่ได้แก้ในรอบนี้ตามคำสั่ง "ห้ามแก้ docker-compose ในงานนี้" (ยังเป็น infrastructure follow-up ที่ค้างอยู่)
+- Server-side authorization ยังมีเฉพาะ endpoint `/api/admin/ft/**` เท่านั้น — endpoint อื่นทั้งหมดของ `/api/admin/**` (users, zones, billing-config เดิม ฯลฯ) ยังคงเป็น client-gated only เหมือนเดิมทุกประการ (ตามคำสั่ง "ไม่ต้อง refactor authorization ของ API อื่นที่อยู่นอก scope")
+- ยังไม่มี browser จริง (Playwright/headless) ในสภาพแวดล้อมนี้ — การตรวจสอบ UI (`FtRateManagement.tsx`) ทำผ่านการอ่านโค้ด + typecheck/lint/build เท่านั้น ยังไม่ได้คลิกทดสอบจริงในเบราว์เซอร์
+
+**ไฟล์ใหม่**: `src/lib/billing/{ftResolver,ftService,ftValidation}.ts` (+`.test.ts` สำหรับ ftResolver/ftValidation), `src/lib/billing/ftApi.ts` (public client fetch), `src/lib/admin/{adminSession,requireAdmin,ftApi}.ts`, `src/app/api/admin/ft/**` (route.ts, list, [id], [id]/history, [id]/disable, [id]/enable, [id]/documents, [id]/documents/[docId]), `src/app/api/billing/ft/current/route.ts`, `src/components/admin/FtRateManagement.tsx`, migration `20260917064302_add_ft_rate_monthly`
+
+**ไฟล์ที่แก้**: `prisma/schema.prisma` (เพิ่ม model/enum ใหม่ + relation ใน `User`), `src/lib/export/calculation.ts`+test, `src/lib/billing/breakdown.ts`+test, `src/lib/billing/explanation.ts`+test, `src/lib/export/mapReadingToRow.ts`+test, `src/components/BillingBreakdownPanel.tsx`, `src/components/ReadingHistoryList.tsx`, `src/components/reading/ReadingVerificationSummary.tsx`, `src/components/admin/BillingSettingsManagement.tsx` (เพิ่มข้อความเตือน legacy), `src/app/checker/reading/page.tsx`, `src/app/resident/page.tsx`, `src/app/admin/page.tsx` (เพิ่มแท็บ), `src/app/page.tsx` (บันทึก adminSession), `src/app/api/auth/login/route.ts` (เพิ่ม session ให้ admin), `src/lib/auth/authApi.ts` (type), `src/lib/admin/types.ts` (DTOs ใหม่), `src/app/api/resident/history/route.ts`, `src/app/api/executive/summary/route.ts`, `src/app/api/export/route.ts`, `src/lib/db/mockPrisma.ts`+`mockStore.ts`
+
+**สถานะ**: ✅ Implementation เสร็จสมบูรณ์ตาม FINAL DECISIONS ที่ยืนยัน — regression ครบ (tsc/lint/test/build ผ่านหมด), ทดสอบจริงต่อ PostgreSQL production DB ผ่านทุก endpoint รวม 401/403/409/no-fallback, ข้อมูลเดิมไม่ถูกแตะต้อง/ลบ/migrate ใดๆ ทั้งสิ้น

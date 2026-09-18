@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { DEFAULT_BILLING_CONFIG } from "@/lib/billing/defaultConfig";
+import { resolveFtForMonth } from "@/lib/billing/ftResolver";
 import { prisma } from "@/lib/db/prisma";
 import { buildMeterBillingWorkbook } from "@/lib/export/excel";
 import { buildExportFilename } from "@/lib/export/filename";
@@ -47,8 +48,15 @@ export async function GET(request: Request) {
   const billingConfig =
     parseBillingConfigParam(searchParams.get("config")) ?? DEFAULT_BILLING_CONFIG;
 
+  // Every row in this export is for the same `readingMonth` (the route's
+  // own `where` filter above), so Ft resolves once for that month
+  // (2026-09-17) — never per-row, and never "the current rate" for a past
+  // month's export.
+  const ftResolution = await resolveFtForMonth(readingMonth);
+  const resolvedFtRate = ftResolution.found ? ftResolution.ftRate : null;
+
   const rows = readings.map((reading, index) =>
-    mapReadingToRow(reading, index + 1, billingConfig),
+    mapReadingToRow(reading, index + 1, billingConfig, resolvedFtRate),
   );
   const buffer = await buildMeterBillingWorkbook({
     monthLabel: formatMonthThai(month),

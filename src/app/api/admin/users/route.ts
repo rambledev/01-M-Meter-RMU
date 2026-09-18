@@ -28,6 +28,7 @@ async function listUsers(): Promise<UserDTO[]> {
     username: u.username,
     email: u.email,
     role: u.role,
+    isApproved: u.isApproved,
     responsibleZones: u.responsibleZones,
     residentRoom: u.residentRoom
       ? { id: u.residentRoom.id, name: u.residentRoom.name, zoneName: u.residentRoom.zone.name }
