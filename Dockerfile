@@ -23,9 +23,19 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# public/upload/{meter,doc} are gitignored (never in the build context) and
+# written at request time by the nextjs user (mkdir + writeFile in
+# src/app/api/readings/sync/route.ts and the *document/route.ts handlers) —
+# pre-create them owned by nextjs here so a Coolify/Docker named volume
+# mounted at ./public/upload inherits the right ownership on its first
+# (empty-volume) population, instead of defaulting to root and making every
+# upload fail with EACCES.
+RUN mkdir -p public/upload/meter public/upload/doc \
+  && chown -R nextjs:nodejs public/upload
 
 USER nextjs
 EXPOSE 3000
