@@ -13,7 +13,9 @@ export function parseBillingConfigParam(raw: string | null): BillingConfig | nul
       typeof parsed?.ftRate !== "number" ||
       typeof parsed?.taxRatePercent !== "number" ||
       typeof parsed?.baseCharge !== "number" ||
-      !Array.isArray(parsed?.tiers)
+      typeof parsed?.highUsageThreshold !== "number" ||
+      !Array.isArray(parsed?.lowUsageTiers) ||
+      !Array.isArray(parsed?.highUsageTiers)
     ) {
       return null;
     }

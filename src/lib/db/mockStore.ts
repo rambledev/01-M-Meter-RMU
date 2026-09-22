@@ -81,18 +81,15 @@ export interface MockSyncLog {
   errorReason: string | null;
 }
 
-export interface MockBillingTier {
-  minUnit: number;
-  maxUnit: number | null;
-  rate: number;
-}
-
+// Opaque, same as the real Prisma `tiers Json` column — holds
+// { highUsageThreshold, lowUsageTiers, highUsageTiers } (2026-09-22),
+// packed/unpacked only by src/lib/billing/billingConfigServer.ts.
 export interface MockBillingConfigRow {
   id: string;
   ftRate: number;
   taxRatePercent: number;
   baseCharge: number;
-  tiers: MockBillingTier[];
+  tiers: unknown;
   documentPath: string | null;
   documentName: string | null;
   updatedAt: Date;

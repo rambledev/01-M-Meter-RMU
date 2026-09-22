@@ -3,10 +3,23 @@ import { prisma } from "@/lib/db/prisma";
 import { DEFAULT_BILLING_CONFIG } from "./defaultConfig";
 import type { BillingConfig, BillingTier } from "./types";
 
-// Prisma's Json input type wants InputJsonValue, not our own BillingTier[]
-// shape — a plain array of plain objects is valid JSON either way.
-function tiersToJson(tiers: BillingTier[]): Prisma.InputJsonValue {
-  return tiers as unknown as Prisma.InputJsonValue;
+// The Prisma model still has exactly one `tiers Json` column (no schema
+// change/migration for the 2026-09-22 two-tier-table feature) — it now
+// holds an object carrying BOTH tables plus the threshold, instead of a
+// flat BillingTier[]. Packing/unpacking that shape happens only here.
+interface TiersJsonShape {
+  highUsageThreshold: number;
+  lowUsageTiers: BillingTier[];
+  highUsageTiers: BillingTier[];
+}
+
+function tiersToJson(config: Pick<BillingConfig, "highUsageThreshold" | "lowUsageTiers" | "highUsageTiers">): Prisma.InputJsonValue {
+  const shape: TiersJsonShape = {
+    highUsageThreshold: config.highUsageThreshold,
+    lowUsageTiers: config.lowUsageTiers,
+    highUsageTiers: config.highUsageTiers,
+  };
+  return shape as unknown as Prisma.InputJsonValue;
 }
 
 const SINGLETON_ID = "singleton";
@@ -19,11 +32,14 @@ function toBillingConfig(row: {
   documentPath?: string | null;
   documentName?: string | null;
 }): BillingConfig {
+  const shape = row.tiers as TiersJsonShape;
   return {
     ftRate: row.ftRate,
     taxRatePercent: row.taxRatePercent,
     baseCharge: row.baseCharge,
-    tiers: row.tiers as BillingTier[],
+    highUsageThreshold: shape.highUsageThreshold,
+    lowUsageTiers: shape.lowUsageTiers,
+    highUsageTiers: shape.highUsageTiers,
     documentPath: row.documentPath ?? null,
     documentName: row.documentName ?? null,
   };
@@ -38,7 +54,13 @@ export async function getOrSeedBillingConfig(): Promise<BillingConfig> {
   if (existing) return toBillingConfig(existing);
 
   const seeded = await prisma.billingConfig.create({
-    data: { id: SINGLETON_ID, ...DEFAULT_BILLING_CONFIG, tiers: tiersToJson(DEFAULT_BILLING_CONFIG.tiers) },
+    data: {
+      id: SINGLETON_ID,
+      ftRate: DEFAULT_BILLING_CONFIG.ftRate,
+      taxRatePercent: DEFAULT_BILLING_CONFIG.taxRatePercent,
+      baseCharge: DEFAULT_BILLING_CONFIG.baseCharge,
+      tiers: tiersToJson(DEFAULT_BILLING_CONFIG),
+    },
   });
   return toBillingConfig(seeded);
 }
@@ -46,21 +68,27 @@ export async function getOrSeedBillingConfig(): Promise<BillingConfig> {
 export async function saveBillingConfig(config: BillingConfig): Promise<BillingConfig> {
   const saved = await prisma.billingConfig.upsert({
     where: { id: SINGLETON_ID },
-    create: { id: SINGLETON_ID, ...config, tiers: tiersToJson(config.tiers) },
+    create: {
+      id: SINGLETON_ID,
+      ftRate: config.ftRate,
+      taxRatePercent: config.taxRatePercent,
+      baseCharge: config.baseCharge,
+      tiers: tiersToJson(config),
+    },
     update: {
       ftRate: config.ftRate,
       taxRatePercent: config.taxRatePercent,
       baseCharge: config.baseCharge,
-      tiers: tiersToJson(config.tiers),
+      tiers: tiersToJson(config),
     },
   });
   return toBillingConfig(saved);
 }
 
-// Additive — saveBillingConfig() above only ever touches the 4 rate
-// fields, never these two, and vice versa here: uploading/removing the
-// evidence document never touches ftRate/taxRatePercent/baseCharge/tiers.
-// Kept separate on purpose so saving rates can never accidentally wipe the
+// Additive — saveBillingConfig() above only ever touches the rate fields,
+// never these two, and vice versa here: uploading/removing the evidence
+// document never touches ftRate/taxRatePercent/baseCharge/tiers. Kept
+// separate on purpose so saving rates can never accidentally wipe the
 // attached document, or vice versa.
 export async function saveBillingConfigDocument(
   documentPath: string | null,
@@ -70,8 +98,10 @@ export async function saveBillingConfigDocument(
     where: { id: SINGLETON_ID },
     create: {
       id: SINGLETON_ID,
-      ...DEFAULT_BILLING_CONFIG,
-      tiers: tiersToJson(DEFAULT_BILLING_CONFIG.tiers),
+      ftRate: DEFAULT_BILLING_CONFIG.ftRate,
+      taxRatePercent: DEFAULT_BILLING_CONFIG.taxRatePercent,
+      baseCharge: DEFAULT_BILLING_CONFIG.baseCharge,
+      tiers: tiersToJson(DEFAULT_BILLING_CONFIG),
       documentPath,
       documentName,
     },

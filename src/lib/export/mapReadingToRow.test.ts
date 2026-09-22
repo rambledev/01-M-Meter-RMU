@@ -6,7 +6,9 @@ const CONFIG: BillingConfig = {
   ftRate: 0.5,
   taxRatePercent: 10,
   baseCharge: 10,
-  tiers: [{ minUnit: 0, maxUnit: null, rate: 2 }],
+  highUsageThreshold: 1000,
+  lowUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 2 }],
+  highUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 2 }],
 };
 
 function reading(overrides: Partial<ReadingForExport> = {}): ReadingForExport {
@@ -32,12 +34,13 @@ describe("mapReadingToRow", () => {
 
   it("calls the Calculation Service for billing — usage=60 at the given config/resolved Ft", () => {
     const row = mapReadingToRow(reading(), 1, CONFIG, 0.5);
-    // usage=60; baseCharge = 60*2 + 10 = 130; ftCharge = 60*0.5 = 30;
-    // tax = (130+30)*10% = 16; total = 130+30+16 = 176
-    expect(row.baseCharge).toBe(130);
-    expect(row.ftCharge).toBe(30);
-    expect(row.tax).toBeCloseTo(16, 5);
-    expect(row.total).toBeCloseTo(176, 5);
+    // usage=60; baseCharge(ค่าพื้นฐานรวม)=60*2=120 (no service charge,
+    // 2026-09-22); ftCharge=120*0.5=60; preVatCharge=180; tax=180*10%=18;
+    // total=180+18+10(ค่าบริการ, added once at the end)=208
+    expect(row.baseCharge).toBe(120);
+    expect(row.ftCharge).toBe(60);
+    expect(row.tax).toBeCloseTo(18, 5);
+    expect(row.total).toBeCloseTo(208, 5);
   });
 
   it("accepts Prisma Decimal-like values (anything Number()-coercible)", () => {
@@ -81,7 +84,7 @@ describe("mapReadingToRow", () => {
 
   it("uses whatever resolved Ft rate is passed in — no formula duplicated here", () => {
     const row = mapReadingToRow(reading(), 1, CONFIG, 2);
-    expect(row.ftCharge).toBe(120); // usage=60 * resolvedFtRate=2
+    expect(row.ftCharge).toBe(240); // baseCharge=120 * resolvedFtRate=2
   });
 
   it("withholds the whole bill (not just Ft) when Ft is not configured for the month", () => {

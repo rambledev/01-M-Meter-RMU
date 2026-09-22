@@ -6,7 +6,9 @@ const CONFIG: BillingConfig = {
   ftRate: 0.5,
   taxRatePercent: 10,
   baseCharge: 10,
-  tiers: [{ minUnit: 0, maxUnit: null, rate: 2 }],
+  highUsageThreshold: 150,
+  lowUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 2 }],
+  highUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 3 }],
 };
 
 describe("parseBillingConfigParam", () => {

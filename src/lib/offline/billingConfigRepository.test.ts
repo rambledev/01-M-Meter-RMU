@@ -18,7 +18,9 @@ describe("getCachedBillingConfig", () => {
       ftRate: 0.5,
       taxRatePercent: 5,
       baseCharge: 20,
-      tiers: [{ minUnit: 0, maxUnit: null, rate: 3 }],
+      highUsageThreshold: 150,
+      lowUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 3 }],
+      highUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 4 }],
     };
     await saveCachedBillingConfig(custom);
 
@@ -34,12 +36,12 @@ describe("saveCachedBillingConfig", () => {
   });
 
   it("overwrites the previously cached config (custom tier rate)", async () => {
-    const customTiers = DEFAULT_BILLING_CONFIG.tiers.map((t, i) =>
+    const customTiers = DEFAULT_BILLING_CONFIG.lowUsageTiers.map((t, i) =>
       i === 0 ? { ...t, rate: 9.99 } : t,
     );
-    await saveCachedBillingConfig({ ...DEFAULT_BILLING_CONFIG, tiers: customTiers });
+    await saveCachedBillingConfig({ ...DEFAULT_BILLING_CONFIG, lowUsageTiers: customTiers });
 
     const config = await getCachedBillingConfig();
-    expect(config?.tiers[0].rate).toBe(9.99);
+    expect(config?.lowUsageTiers[0].rate).toBe(9.99);
   });
 });

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { buildBillingExplanation } from "@/lib/billing/explanation";
 import type { BillingConfig } from "@/lib/billing/types";
 
-function tierLabel(tier: BillingConfig["tiers"][number]): string {
+function tierLabel(tier: BillingConfig["lowUsageTiers"][number]): string {
   const range = tier.maxUnit === null ? `${tier.minUnit}+` : `${tier.minUnit}–${tier.maxUnit}`;
   return `${range} หน่วย`;
 }
@@ -38,15 +38,28 @@ export default function BillingExplanation({
             ))}
           </ol>
 
-          <p className="mt-2 font-semibold">ช่วงอัตราค่าไฟพื้นฐานปัจจุบัน</p>
+          <p className="mt-2 font-semibold">
+            ช่วงอัตราค่าไฟพื้นฐาน — ใช้ไฟไม่เกิน {explanation.config.highUsageThreshold} หน่วย
+          </p>
           <ul className="list-disc pl-5">
-            {explanation.config.tiers.map((tier, i) => (
+            {explanation.config.lowUsageTiers.map((tier, i) => (
               <li key={i}>
                 {tierLabel(tier)}: {tier.rate} บาท/หน่วย
               </li>
             ))}
           </ul>
-          <p>ค่าฐาน (คงที่): {explanation.config.baseCharge} บาท</p>
+
+          <p className="mt-2 font-semibold">
+            ช่วงอัตราค่าไฟพื้นฐาน — ใช้ไฟมากกว่า {explanation.config.highUsageThreshold} หน่วย
+          </p>
+          <ul className="list-disc pl-5">
+            {explanation.config.highUsageTiers.map((tier, i) => (
+              <li key={i}>
+                {tierLabel(tier)}: {tier.rate} บาท/หน่วย
+              </li>
+            ))}
+          </ul>
+          <p>ค่าบริการ: {explanation.config.baseCharge} บาท</p>
 
           <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-amber-800">
             {explanation.disclaimer}

@@ -8,8 +8,9 @@ function nowIso(): string {
 }
 
 function toBillingConfig(stored: LocalBillingConfig): BillingConfig {
-  const { ftRate, taxRatePercent, baseCharge, tiers } = stored;
-  return { ftRate, taxRatePercent, baseCharge, tiers };
+  const { ftRate, taxRatePercent, baseCharge, highUsageThreshold, lowUsageTiers, highUsageTiers } =
+    stored;
+  return { ftRate, taxRatePercent, baseCharge, highUsageThreshold, lowUsageTiers, highUsageTiers };
 }
 
 // Offline-cache only — the Billing Configuration itself lives in PostgreSQL

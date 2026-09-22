@@ -1,6 +1,6 @@
 "use client";
 
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import {
   deleteBillingConfigDocument,
   updateBillingConfig,
@@ -35,6 +35,121 @@ function toBillingTiers(drafts: DraftTier[]): BillingTier[] {
   }));
 }
 
+// Two independent tier tables now (2026-09-22: "ไม่เกิน 150 หน่วย" vs
+// "มากกว่า 150 หน่วย") — these three take the setState dispatcher as a
+// parameter so both tables share the same edit logic without a generic
+// multi-table abstraction neither table needs.
+function updateTierAt(
+  setTiers: Dispatch<SetStateAction<DraftTier[]>>,
+  index: number,
+  patch: Partial<DraftTier>,
+) {
+  setTiers((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
+}
+
+function addTierTo(setTiers: Dispatch<SetStateAction<DraftTier[]>>) {
+  setTiers((prev) => {
+    const last = prev[prev.length - 1];
+    const lastMax = last ? Number(last.maxUnit || last.minUnit) : -1;
+    const newMin = lastMax + 1;
+    const closedLast: DraftTier[] = last
+      ? [...prev.slice(0, -1), { ...last, maxUnit: String(newMin - 1) }]
+      : [];
+    return [...closedLast, { minUnit: String(newMin), maxUnit: "", rate: "0" }];
+  });
+}
+
+function removeTierFrom(setTiers: Dispatch<SetStateAction<DraftTier[]>>, index: number) {
+  setTiers((prev) => prev.filter((_, i) => i !== index));
+}
+
+// One tier table's editor — rendered twice (low/high usage) with the same
+// layout, each wired to its own state.
+function TierTable({
+  title,
+  tiers,
+  setTiers,
+}: {
+  title: string;
+  tiers: DraftTier[];
+  setTiers: Dispatch<SetStateAction<DraftTier[]>>;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-semibold">{title}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px] text-sm">
+          <thead>
+            <tr className="text-left text-xs text-zinc-500">
+              <th className="pb-1 pr-2">หน่วยเริ่มต้น</th>
+              <th className="pb-1 pr-2">หน่วยสูงสุด</th>
+              <th className="pb-1 pr-2">บาท/หน่วย</th>
+              <th className="pb-1"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {tiers.map((tier, index) => {
+              const isLast = index === tiers.length - 1;
+              return (
+                <tr key={index}>
+                  <td className="pr-2 pb-2">
+                    <input
+                      type="number"
+                      step="1"
+                      value={tier.minUnit}
+                      onChange={(e) => updateTierAt(setTiers, index, { minUnit: e.target.value })}
+                      className="w-24 rounded-lg border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                  </td>
+                  <td className="pr-2 pb-2">
+                    {isLast ? (
+                      <span className="text-zinc-500">ไม่จำกัด</span>
+                    ) : (
+                      <input
+                        type="number"
+                        step="1"
+                        value={tier.maxUnit}
+                        onChange={(e) => updateTierAt(setTiers, index, { maxUnit: e.target.value })}
+                        className="w-24 rounded-lg border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+                      />
+                    )}
+                  </td>
+                  <td className="pr-2 pb-2">
+                    <input
+                      type="number"
+                      step="any"
+                      value={tier.rate}
+                      onChange={(e) => updateTierAt(setTiers, index, { rate: e.target.value })}
+                      className="w-28 rounded-lg border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                  </td>
+                  <td className="pb-2">
+                    <button
+                      type="button"
+                      onClick={() => removeTierFrom(setTiers, index)}
+                      disabled={tiers.length <= 1}
+                      className="rounded-lg border border-zinc-300 px-2 py-1 text-xs disabled:opacity-40 dark:border-zinc-700"
+                    >
+                      ลบ
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <button
+        type="button"
+        onClick={() => addTierTo(setTiers)}
+        className="self-start rounded-lg border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-700"
+      >
+        + เพิ่มช่วงอัตรา
+      </button>
+    </div>
+  );
+}
+
 // Admin tab "ตั้งค่าค่าไฟ" — was BillingSettingsPanel.tsx living inline on
 // /checker with per-device IndexedDB storage; moved here 2026-09-06 so it's
 // a single shared PostgreSQL config every /checker device reads (Admin is
@@ -44,7 +159,9 @@ export default function BillingSettingsManagement() {
   const [ftRate, setFtRate] = useState("");
   const [taxRatePercent, setTaxRatePercent] = useState("");
   const [baseCharge, setBaseCharge] = useState("");
-  const [tiers, setTiers] = useState<DraftTier[]>([]);
+  const [highUsageThreshold, setHighUsageThreshold] = useState("");
+  const [lowTiers, setLowTiers] = useState<DraftTier[]>([]);
+  const [highTiers, setHighTiers] = useState<DraftTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -64,7 +181,9 @@ export default function BillingSettingsManagement() {
       setFtRate(String(config.ftRate));
       setTaxRatePercent(String(config.taxRatePercent));
       setBaseCharge(String(config.baseCharge));
-      setTiers(toDraftTiers(config.tiers));
+      setHighUsageThreshold(String(config.highUsageThreshold));
+      setLowTiers(toDraftTiers(config.lowUsageTiers));
+      setHighTiers(toDraftTiers(config.highUsageTiers));
       setDocumentPath(config.documentPath ?? null);
       setDocumentName(config.documentName ?? null);
       setLoading(false);
@@ -106,35 +225,14 @@ export default function BillingSettingsManagement() {
     }
   }
 
-  function updateTier(index: number, patch: Partial<DraftTier>) {
-    setSavedMessage(null);
-    setTiers((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
-  }
-
-  function addTier() {
-    setSavedMessage(null);
-    setTiers((prev) => {
-      const last = prev[prev.length - 1];
-      const lastMax = last ? Number(last.maxUnit || last.minUnit) : -1;
-      const newMin = lastMax + 1;
-      const closedLast: DraftTier[] = last
-        ? [...prev.slice(0, -1), { ...last, maxUnit: String(newMin - 1) }]
-        : [];
-      return [...closedLast, { minUnit: String(newMin), maxUnit: "", rate: "0" }];
-    });
-  }
-
-  function removeTier(index: number) {
-    setSavedMessage(null);
-    setTiers((prev) => prev.filter((_, i) => i !== index));
-  }
-
   function buildConfig(): BillingConfig {
     return {
       ftRate: Number(ftRate),
       taxRatePercent: Number(taxRatePercent),
       baseCharge: Number(baseCharge),
-      tiers: toBillingTiers(tiers),
+      highUsageThreshold: Number(highUsageThreshold),
+      lowUsageTiers: toBillingTiers(lowTiers),
+      highUsageTiers: toBillingTiers(highTiers),
     };
   }
 
@@ -145,8 +243,12 @@ export default function BillingSettingsManagement() {
       errs.push("ภาษีต้องไม่ติดลบ");
     if (Number.isNaN(config.baseCharge) || config.baseCharge < 0)
       errs.push("ค่าฐานต้องไม่ติดลบ");
-    const tierResult = validateTiers(config.tiers);
-    errs.push(...tierResult.errors.map((e) => e.message));
+    if (Number.isNaN(config.highUsageThreshold) || config.highUsageThreshold <= 0)
+      errs.push("จำนวนหน่วยที่ใช้แบ่งกรณีต้องมากกว่า 0");
+    const lowResult = validateTiers(config.lowUsageTiers);
+    errs.push(...lowResult.errors.map((e) => `ช่วงไม่เกิน ${highUsageThreshold} หน่วย — ${e.message}`));
+    const highResult = validateTiers(config.highUsageTiers);
+    errs.push(...highResult.errors.map((e) => `ช่วงมากกว่า ${highUsageThreshold} หน่วย — ${e.message}`));
     return errs;
   }
 
@@ -159,7 +261,9 @@ export default function BillingSettingsManagement() {
       setFtRate(String(saved.ftRate));
       setTaxRatePercent(String(saved.taxRatePercent));
       setBaseCharge(String(saved.baseCharge));
-      setTiers(toDraftTiers(saved.tiers));
+      setHighUsageThreshold(String(saved.highUsageThreshold));
+      setLowTiers(toDraftTiers(saved.lowUsageTiers));
+      setHighTiers(toDraftTiers(saved.highUsageTiers));
       setSavedMessage(successMessage);
     } catch (err) {
       setErrors([err instanceof Error ? err.message : "บันทึกไม่สำเร็จ"]);
@@ -247,78 +351,44 @@ export default function BillingSettingsManagement() {
         />
       </div>
 
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-semibold">ช่วงอัตราค่าไฟ</p>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] text-sm">
-            <thead>
-              <tr className="text-left text-xs text-zinc-500">
-                <th className="pb-1 pr-2">หน่วยเริ่มต้น</th>
-                <th className="pb-1 pr-2">หน่วยสูงสุด</th>
-                <th className="pb-1 pr-2">บาท/หน่วย</th>
-                <th className="pb-1"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {tiers.map((tier, index) => {
-                const isLast = index === tiers.length - 1;
-                return (
-                  <tr key={index}>
-                    <td className="pr-2 pb-2">
-                      <input
-                        type="number"
-                        step="1"
-                        value={tier.minUnit}
-                        onChange={(e) => updateTier(index, { minUnit: e.target.value })}
-                        className="w-24 rounded-lg border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
-                      />
-                    </td>
-                    <td className="pr-2 pb-2">
-                      {isLast ? (
-                        <span className="text-zinc-500">ไม่จำกัด</span>
-                      ) : (
-                        <input
-                          type="number"
-                          step="1"
-                          value={tier.maxUnit}
-                          onChange={(e) => updateTier(index, { maxUnit: e.target.value })}
-                          className="w-24 rounded-lg border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
-                        />
-                      )}
-                    </td>
-                    <td className="pr-2 pb-2">
-                      <input
-                        type="number"
-                        step="any"
-                        value={tier.rate}
-                        onChange={(e) => updateTier(index, { rate: e.target.value })}
-                        className="w-28 rounded-lg border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
-                      />
-                    </td>
-                    <td className="pb-2">
-                      <button
-                        type="button"
-                        onClick={() => removeTier(index)}
-                        disabled={tiers.length <= 1}
-                        className="rounded-lg border border-zinc-300 px-2 py-1 text-xs disabled:opacity-40 dark:border-zinc-700"
-                      >
-                        ลบ
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <button
-          type="button"
-          onClick={addTier}
-          className="self-start rounded-lg border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-700"
-        >
-          + เพิ่มช่วงอัตรา
-        </button>
+      <div className="flex flex-col gap-1">
+        <label className="text-sm" htmlFor="high-usage-threshold">
+          จำนวนหน่วยที่ใช้แบ่งกรณี (หน่วย)
+        </label>
+        <p className="text-xs text-zinc-500">
+          ใช้ไฟไม่เกินจำนวนนี้ → ใช้ตาราง &quot;ไม่เกิน&quot; ด้านล่าง; เกินจำนวนนี้ → ใช้ตาราง
+          &quot;มากกว่า&quot; ทั้งตาราง (ไม่ใช่ตารางต่อกัน — คนละตารางอิสระจากกัน)
+        </p>
+        <input
+          id="high-usage-threshold"
+          type="number"
+          step="1"
+          value={highUsageThreshold}
+          onChange={(e) => {
+            setSavedMessage(null);
+            setHighUsageThreshold(e.target.value);
+          }}
+          className="w-32 rounded-lg border border-zinc-300 px-3 py-2 text-base dark:border-zinc-700 dark:bg-zinc-900"
+        />
       </div>
+
+      <TierTable
+        title={`ช่วงอัตราค่าไฟ (ใช้ไฟไม่เกิน ${highUsageThreshold || "…"} หน่วย)`}
+        tiers={lowTiers}
+        setTiers={(action) => {
+          setSavedMessage(null);
+          setLowTiers(action);
+        }}
+      />
+
+      <TierTable
+        title={`ช่วงอัตราค่าไฟ (ใช้ไฟมากกว่า ${highUsageThreshold || "…"} หน่วย)`}
+        tiers={highTiers}
+        setTiers={(action) => {
+          setSavedMessage(null);
+          setHighTiers(action);
+        }}
+      />
 
       <div className="flex flex-col gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
         <p className="text-sm font-semibold">หลักฐานการปรับค่าไฟ</p>

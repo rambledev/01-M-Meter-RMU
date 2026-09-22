@@ -4,10 +4,9 @@ import { validateTiers } from "./tierValidation";
 import type { BillingTier } from "./types";
 
 describe("validateTiers", () => {
-  it("accepts the default configuration", () => {
-    const result = validateTiers(DEFAULT_BILLING_CONFIG.tiers);
-    expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
+  it("accepts the default configuration (both tables)", () => {
+    expect(validateTiers(DEFAULT_BILLING_CONFIG.lowUsageTiers).valid).toBe(true);
+    expect(validateTiers(DEFAULT_BILLING_CONFIG.highUsageTiers).valid).toBe(true);
   });
 
   it("rejects an empty tier list", () => {

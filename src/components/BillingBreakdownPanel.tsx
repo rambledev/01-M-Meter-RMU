@@ -42,13 +42,15 @@ export default function BillingBreakdownPanel({
       <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
         <span className="text-zinc-500">หน่วยที่ใช้</span>
         <span>{breakdown.usage ?? "-"}</span>
-        <span className="text-zinc-500">ค่าไฟพื้นฐาน</span>
+        <span className="text-zinc-500">ค่าพื้นฐานรวม</span>
         <span>{baht(breakdown.baseCharge)}</span>
         <span className="text-zinc-500">ค่า FT</span>
         <span>{baht(breakdown.ft)}</span>
-        <span className="text-zinc-500">ภาษี</span>
+        <span className="text-zinc-500">VAT ({config.taxRatePercent}%)</span>
         <span>{baht(breakdown.tax)}</span>
-        <span className="font-semibold text-zinc-700 dark:text-zinc-300">รวมทั้งสิ้น</span>
+        <span className="text-zinc-500">ค่าบริการ</span>
+        <span>{breakdown.baseChargeFixed.toFixed(2)}</span>
+        <span className="font-semibold text-zinc-700 dark:text-zinc-300">ค่าไฟสุทธิ</span>
         <span className="font-semibold">{baht(breakdown.total)}</span>
       </div>
 
@@ -80,8 +82,7 @@ export default function BillingBreakdownPanel({
                 หน่วยที่ใช้: {breakdown.confirmedValue} - {breakdown.previousReading} ={" "}
                 {breakdown.usage} หน่วย
               </p>
-              <p className="mt-1 font-semibold">ค่าไฟพื้นฐาน:</p>
-              <p>ค่าฐาน (คงที่) = {breakdown.baseChargeFixed.toFixed(2)} บาท</p>
+              <p className="mt-1 font-semibold">ค่าพื้นฐานรวม (ไม่รวมค่าบริการ):</p>
               {breakdown.tierLines
                 .filter((line) => line.units > 0)
                 .map((line, i) => (
@@ -94,20 +95,30 @@ export default function BillingBreakdownPanel({
                     {line.charge.toFixed(2)} บาท
                   </p>
                 ))}
-              <p>รวมค่าไฟพื้นฐาน = {baht(breakdown.baseCharge)} บาท</p>
+              <p>ค่าพื้นฐานรวม = {baht(breakdown.baseCharge)} บาท</p>
+
               <p className="mt-1 font-semibold">ค่า FT:</p>
               <p>
-                {breakdown.usage} × {resolvedFtRate} = {baht(breakdown.ft)} บาท
+                {baht(breakdown.baseCharge)} × {resolvedFtRate} = {baht(breakdown.ft)} บาท
               </p>
-              <p className="mt-1 font-semibold">ภาษี:</p>
+
+              <p className="mt-1 font-semibold">ค่าไฟก่อน VAT:</p>
               <p>
-                ({baht(breakdown.baseCharge)} + {baht(breakdown.ft)}) × {config.taxRatePercent}% ={" "}
-                {baht(breakdown.tax)} บาท
+                {baht(breakdown.baseCharge)} + {baht(breakdown.ft)} = {baht(breakdown.preVatCharge)} บาท
               </p>
-              <p className="mt-1 font-semibold">รวมทั้งสิ้น:</p>
+
+              <p className="mt-1 font-semibold">VAT:</p>
               <p>
-                {baht(breakdown.baseCharge)} + {baht(breakdown.ft)} + {baht(breakdown.tax)} ={" "}
-                {baht(breakdown.total)} บาท
+                {baht(breakdown.preVatCharge)} × {config.taxRatePercent}% = {baht(breakdown.tax)} บาท
+              </p>
+
+              <p className="mt-1 font-semibold">ค่าบริการ:</p>
+              <p>{breakdown.baseChargeFixed.toFixed(2)} บาท</p>
+
+              <p className="mt-1 font-semibold">ค่าไฟสุทธิ:</p>
+              <p>
+                {baht(breakdown.preVatCharge)} + {baht(breakdown.tax)} +{" "}
+                {breakdown.baseChargeFixed.toFixed(2)} = {baht(breakdown.total)} บาท
               </p>
             </>
           )}

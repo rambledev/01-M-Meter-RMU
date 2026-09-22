@@ -13,7 +13,16 @@ export interface BillingConfig {
   ftRate: number; // baht per unit
   taxRatePercent: number; // e.g. 7 means 7%
   baseCharge: number; // fixed baht, charged once regardless of usage
-  tiers: BillingTier[]; // ordered ascending by minUnit, non-overlapping
+  // Two separate rate tables (2026-09-22), chosen by the Reading's total
+  // usage for the whole month — never mixed/blended within one bill. This
+  // mirrors how the real PEA/MEA residential tariff works: a household using
+  // <=150 units/month is billed entirely under one tariff category, one
+  // using >150 units/month entirely under a different one — NOT the same
+  // progressive table extended further. src/lib/export/calculation.ts's
+  // selectTiersForUsage() is the one place that decides which table applies.
+  highUsageThreshold: number; // หน่วย — usage <= this uses lowUsageTiers, usage > this uses highUsageTiers
+  lowUsageTiers: BillingTier[]; // ใช้เมื่อ usage <= highUsageThreshold — ordered ascending by minUnit, non-overlapping
+  highUsageTiers: BillingTier[]; // ใช้เมื่อ usage > highUsageThreshold — ordered ascending by minUnit, non-overlapping
   // Supporting evidence for the current rate settings (2026-09-16) —
   // optional, display-only fields. Never read by calculation logic
   // (src/lib/billing/breakdown.ts) — purely documentation for Admin/audit.

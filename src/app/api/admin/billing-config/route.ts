@@ -28,7 +28,9 @@ export async function PUT(request: Request) {
   const ftRate = Number(body?.ftRate);
   const taxRatePercent = Number(body?.taxRatePercent);
   const baseCharge = Number(body?.baseCharge);
-  const tiers = parseTiers(body?.tiers);
+  const highUsageThreshold = Number(body?.highUsageThreshold);
+  const lowUsageTiers = parseTiers(body?.lowUsageTiers);
+  const highUsageTiers = parseTiers(body?.highUsageTiers);
 
   if (
     !Number.isFinite(ftRate) ||
@@ -37,21 +39,36 @@ export async function PUT(request: Request) {
     taxRatePercent < 0 ||
     !Number.isFinite(baseCharge) ||
     baseCharge < 0 ||
-    tiers === null
+    !Number.isFinite(highUsageThreshold) ||
+    highUsageThreshold <= 0 ||
+    lowUsageTiers === null ||
+    highUsageTiers === null
   ) {
     return apiError(400, "VALIDATION_ERROR", "ข้อมูลตั้งค่าค่าไฟไม่ถูกต้อง");
   }
 
-  const tierResult = validateTiers(tiers);
-  if (!tierResult.valid) {
-    return apiError(
-      400,
-      "VALIDATION_ERROR",
-      tierResult.errors[0]?.message ?? "ช่วงอัตราค่าไฟไม่ถูกต้อง",
-    );
+  for (const [label, tiers] of [
+    ["ช่วงอัตราค่าไฟ (ไม่เกิน)", lowUsageTiers],
+    ["ช่วงอัตราค่าไฟ (มากกว่า)", highUsageTiers],
+  ] as const) {
+    const tierResult = validateTiers(tiers);
+    if (!tierResult.valid) {
+      return apiError(
+        400,
+        "VALIDATION_ERROR",
+        `${label}: ${tierResult.errors[0]?.message ?? "ไม่ถูกต้อง"}`,
+      );
+    }
   }
 
-  const config: BillingConfig = { ftRate, taxRatePercent, baseCharge, tiers };
+  const config: BillingConfig = {
+    ftRate,
+    taxRatePercent,
+    baseCharge,
+    highUsageThreshold,
+    lowUsageTiers,
+    highUsageTiers,
+  };
   const saved = await saveBillingConfig(config);
   return NextResponse.json({ ok: true, data: saved });
 }

@@ -8,7 +8,9 @@ describe("buildBillingExplanation", () => {
       ftRate: 0.1234,
       taxRatePercent: 9,
       baseCharge: 5.5,
-      tiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageThreshold: 150,
+      lowUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
     };
 
     const explanation = buildBillingExplanation(config);
@@ -22,7 +24,9 @@ describe("buildBillingExplanation", () => {
       ftRate: 0.1234,
       taxRatePercent: 9,
       baseCharge: 5.5,
-      tiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageThreshold: 150,
+      lowUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
     });
     expect(explanation.steps.some((s) => s.includes("0.1234"))).toBe(false);
     expect(explanation.steps.some((s) => s.includes("รายเดือน"))).toBe(true);
@@ -33,16 +37,33 @@ describe("buildBillingExplanation", () => {
       ftRate: 0.1,
       taxRatePercent: 7,
       baseCharge: 1,
-      tiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageThreshold: 150,
+      lowUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
     });
     const b = buildBillingExplanation({
       ftRate: 0.2,
       taxRatePercent: 8,
       baseCharge: 1,
-      tiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageThreshold: 150,
+      lowUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
     });
 
     expect(a.steps).not.toEqual(b.steps);
+  });
+
+  // 2026-09-22: two-case tariff selection (ไม่เกิน/มากกว่า highUsageThreshold)
+  it("explains the two-tier-table selection using the config's own threshold", () => {
+    const explanation = buildBillingExplanation({
+      ftRate: 0.1,
+      taxRatePercent: 7,
+      baseCharge: 1,
+      highUsageThreshold: 150,
+      lowUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+    });
+    expect(explanation.steps.some((s) => s.includes("150"))).toBe(true);
   });
 
   it("never claims to be an official formula", () => {
@@ -50,7 +71,9 @@ describe("buildBillingExplanation", () => {
       ftRate: 0.1,
       taxRatePercent: 7,
       baseCharge: 1,
-      tiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageThreshold: 150,
+      lowUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
+      highUsageTiers: [{ minUnit: 0, maxUnit: null, rate: 1 }],
     });
     expect(explanation.disclaimer).not.toContain("สูตรทางการ");
   });

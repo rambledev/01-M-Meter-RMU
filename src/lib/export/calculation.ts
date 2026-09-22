@@ -33,35 +33,61 @@ export interface TierChargeLine {
 
 // Standard graduated/progressive-bracket calculation (like income tax
 // brackets): each tier bills the portion of `usage` that falls between its
-// own minUnit and min(usage, maxUnit). This is the simplest general-purpose
+// own floor and min(usage, maxUnit). This is the simplest general-purpose
 // implementation — it is NOT tuned to reproduce any specific worked example
 // from the source document exactly (Phase 6B kickoff §3: "อย่าฝืนแก้สูตรเพื่อ
 // ให้ Test ผ่าน").
+//
+// The floor for tier i>0 is the PREVIOUS tier's maxUnit, not this tier's own
+// minUnit (2026-09-22 fix). Tiers are configured inclusive on both ends
+// (e.g. "0–15" then "16–25" — tierValidation.ts requires
+// curr.minUnit > prev.maxUnit precisely to express that), so minUnit is
+// already 1 past the previous tier's boundary. Subtracting minUnit directly
+// silently dropped exactly 1 unit at every tier crossing (audit report,
+// 2026-09-22) — using the previous tier's maxUnit as a continuous running
+// boundary keeps sum(units) === usage at every crossing, including into the
+// last, uncapped tier.
 export function computeTierBreakdown(
   usage: number,
   tiers: BillingTier[],
 ): TierChargeLine[] {
-  return tiers.map((tier) => {
+  let prevCap = tiers.length > 0 ? tiers[0].minUnit : 0;
+  return tiers.map((tier, index) => {
     const cap = tier.maxUnit ?? Infinity;
-    const units = Math.max(0, Math.min(usage, cap) - tier.minUnit);
+    const floor = index === 0 ? tier.minUnit : prevCap;
+    const units = Math.max(0, Math.min(usage, cap) - floor);
+    prevCap = tier.maxUnit ?? cap;
     return { tier, units, charge: units * tier.rate };
   });
 }
 
-// ค่าไฟพื้นฐาน = ค่าบริการคงที่ (config.baseCharge) + ผลรวมค่าไฟตามช่วงอัตรา
+// เลือกช่วงอัตราค่าไฟทั้งตาราง (ไม่ใช่ทีละ tier) ตามหน่วยที่ใช้ทั้งเดือน — usage
+// <= highUsageThreshold ใช้ lowUsageTiers ทั้งตาราง, usage > highUsageThreshold
+// ใช้ highUsageTiers ทั้งตาราง (2026-09-22, ตามคำสั่งผู้ใช้: "รองรับ 2 กรณี").
+// จุดเดียวที่ตัดสินใจเรื่องนี้ — calculateBaseCharge() และ
+// src/lib/billing/breakdown.ts (สำหรับแสดง tierLines ใน UI) เรียกจากที่นี่
+// เหมือนกันทั้งคู่ ไม่มีการเช็ค threshold ซ้ำที่อื่น.
+export function selectTiersForUsage(usage: number, config: BillingConfig): BillingTier[] {
+  return usage <= config.highUsageThreshold ? config.lowUsageTiers : config.highUsageTiers;
+}
+
+// ค่าพื้นฐานรวม = ผลรวม(จำนวนหน่วยแต่ละช่วง × อัตราของช่วง) — 2026-09-22: ไม่รวม
+// ค่าบริการ (config.baseCharge) อีกต่อไป (เดิมบวกไว้ตั้งแต่ขั้นนี้) ค่าบริการถูก
+// เลื่อนไปบวกครั้งเดียวตอนท้ายสุดใน calculateTotal() แทน ตามสูตรที่ผู้ใช้กำหนด
+// เลือกตารางช่วงอัตราตามหน่วยที่ใช้ทั้งเดือนก่อน ผ่าน selectTiersForUsage() — ใช้
+// สูตรเดียวกันทั้งกรณีไม่เกิน 150 และเกิน 150 หน่วย (ต่างกันแค่ตารางที่เลือก)
 export function calculateBaseCharge(
   usage: number | null,
   config: BillingConfig,
 ): number | null {
   if (usage === null) return null;
-  const tiered = computeTierBreakdown(usage, config.tiers).reduce(
+  return computeTierBreakdown(usage, selectTiersForUsage(usage, config)).reduce(
     (sum, line) => sum + line.charge,
     0,
   );
-  return config.baseCharge + tiered;
 }
 
-// ค่า FT = หน่วยที่ใช้ × ftRate
+// ค่า FT = ค่าพื้นฐานรวม (บาท, ไม่รวมค่าบริการ) × ftRate
 //
 // ftRate is passed in explicitly — resolved per the Reading's own
 // readingMonth by src/lib/billing/ftResolver.ts (2026-09-17: Ft became a
@@ -71,39 +97,51 @@ export function calculateBaseCharge(
 // caller (calculateBilling below) is responsible for withholding the whole
 // bill rather than silently computing ft as 0.
 export function calculateFT(
-  usage: number | null,
+  baseCharge: number | null,
   ftRate: number | null,
 ): number | null {
-  if (usage === null || ftRate === null) return null;
-  return usage * ftRate;
+  if (baseCharge === null || ftRate === null) return null;
+  return baseCharge * ftRate;
 }
 
-// ภาษี = (ค่าไฟพื้นฐาน + ค่า FT) × taxRatePercent
-export function calculateTax(
+// ค่าไฟก่อน VAT = ค่าพื้นฐานรวม + ค่า FT (2026-09-22) — named quantity from the
+// user's formula, computed once here so calculateTax()/calculateTotal() (and
+// the "ดูวิธีคำนวณ" breakdown, which displays it) never re-derive it separately.
+export function calculatePreVatCharge(
   baseCharge: number | null,
   ft: number | null,
-  config: BillingConfig,
 ): number | null {
   if (baseCharge === null || ft === null) return null;
-  return (baseCharge + ft) * (config.taxRatePercent / 100);
+  return baseCharge + ft;
 }
 
-// รวมทั้งสิ้น = ค่าไฟพื้นฐาน + ค่า FT + ภาษี
-export function calculateTotal(
-  baseCharge: number | null,
-  ft: number | null,
-  tax: number | null,
+// VAT = ค่าไฟก่อน VAT × taxRatePercent
+export function calculateTax(
+  preVatCharge: number | null,
+  config: BillingConfig,
 ): number | null {
-  if (baseCharge === null || ft === null || tax === null) return null;
-  return baseCharge + ft + tax;
+  if (preVatCharge === null) return null;
+  return preVatCharge * (config.taxRatePercent / 100);
+}
+
+// ค่าไฟสุทธิ = ค่าไฟก่อน VAT + VAT + ค่าบริการ (2026-09-22: ค่าบริการบวกเข้ามาที่นี่
+// เป็นครั้งเดียว ไม่ถูกนำไปคิด FT/VAT — ต่างจากเดิมที่บวกไว้ตั้งแต่ calculateBaseCharge())
+export function calculateTotal(
+  preVatCharge: number | null,
+  tax: number | null,
+  config: BillingConfig,
+): number | null {
+  if (preVatCharge === null || tax === null) return null;
+  return preVatCharge + tax + config.baseCharge;
 }
 
 export interface BillingCalculation {
   usage: number | null;
-  baseCharge: number | null; // ค่าไฟพื้นฐาน
+  baseCharge: number | null; // ค่าพื้นฐานรวม (ไม่รวมค่าบริการ)
   ft: number | null; // ค่า FT
-  tax: number | null; // ภาษี
-  total: number | null; // รวมทั้งสิ้น
+  preVatCharge: number | null; // ค่าไฟก่อน VAT = baseCharge + ft
+  tax: number | null; // VAT
+  total: number | null; // ค่าไฟสุทธิ = preVatCharge + tax + ค่าบริการ
   // true เมื่อรู้ usage แล้วแต่ยังไม่มี Ft ของเดือนนั้น (FT_NOT_CONFIGURED) —
   // ต่างจาก usage === null (ยังไม่รู้ usage เลย) ธงนี้บอกสาเหตุที่บิลทั้งชุด
   // ถูกงดแสดงว่าเป็นเพราะ "ไม่มี Ft" ไม่ใช่ "ไม่มี previousReading"
@@ -131,15 +169,32 @@ export function calculateBilling(
   const usage =
     confirmedValue !== null ? calculateUsage(confirmedValue, previousReading) : null;
   if (usage === null) {
-    return { usage: null, baseCharge: null, ft: null, tax: null, total: null, ftNotConfigured: false };
+    return {
+      usage: null,
+      baseCharge: null,
+      ft: null,
+      preVatCharge: null,
+      tax: null,
+      total: null,
+      ftNotConfigured: false,
+    };
   }
   if (resolvedFtRate === null) {
-    return { usage, baseCharge: null, ft: null, tax: null, total: null, ftNotConfigured: true };
+    return {
+      usage,
+      baseCharge: null,
+      ft: null,
+      preVatCharge: null,
+      tax: null,
+      total: null,
+      ftNotConfigured: true,
+    };
   }
 
   const baseCharge = calculateBaseCharge(usage, config);
-  const ft = calculateFT(usage, resolvedFtRate);
-  const tax = calculateTax(baseCharge, ft, config);
-  const total = calculateTotal(baseCharge, ft, tax);
-  return { usage, baseCharge, ft, tax, total, ftNotConfigured: false };
+  const ft = calculateFT(baseCharge, resolvedFtRate);
+  const preVatCharge = calculatePreVatCharge(baseCharge, ft);
+  const tax = calculateTax(preVatCharge, config);
+  const total = calculateTotal(preVatCharge, tax, config);
+  return { usage, baseCharge, ft, preVatCharge, tax, total, ftNotConfigured: false };
 }
