@@ -1,3 +1,5 @@
+import type { FtRateDTO } from "@/lib/admin/types";
+
 // Public (non-admin) client-side lookup of the resolved Ft rate for one
 // specific month — GET /api/billing/ft/current. Used everywhere a bill is
 // displayed client-side so it resolves Ft for THAT reading's own month,
@@ -14,5 +16,21 @@ export async function fetchFtForMonth(monthValue: string): Promise<number | null
     return data.found && typeof data.ftRate === "number" ? data.ftRate : null;
   } catch {
     return null;
+  }
+}
+
+// Public lookup of recent Ft rate announcements (months with an uploaded
+// document) — GET /api/billing/ft/announcements, for the "ประกาศปรับค่า
+// Ft" section on /resident and the home login page (2026-09-23). This is
+// supplementary info, not billing-critical, so any failure resolves to an
+// empty list rather than throwing — the section just renders nothing.
+export async function fetchFtAnnouncements(): Promise<FtRateDTO[]> {
+  try {
+    const res = await fetch("/api/billing/ft/announcements");
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.ok) return [];
+    return Array.isArray(body.data) ? (body.data as FtRateDTO[]) : [];
+  } catch {
+    return [];
   }
 }

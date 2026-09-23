@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import BillingBreakdownPanel from "@/components/BillingBreakdownPanel";
 import BillingExplanation from "@/components/BillingExplanation";
+import FtAnnouncements from "@/components/FtAnnouncements";
 import MonthYearSelect from "@/components/MonthYearSelect";
 import ResidentAuthGate from "@/components/resident/ResidentAuthGate";
 import { fetchBillingConfig } from "@/lib/billing/billingConfigApi";
@@ -129,6 +130,8 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
           {room ? `ห้อง ${room.name} · โซน ${room.zoneName}` : "ยังไม่ได้เลือกห้องพัก"}
         </p>
       </header>
+
+      <FtAnnouncements />
 
       {!room && <RoomPicker userId={session.id} onPicked={handleRoomPicked} />}
 
