@@ -87,14 +87,13 @@ export function deleteMeter(id: string): Promise<MeterDTO[]> {
 export function listUsers(): Promise<UserDTO[]> {
   return request("/api/admin/users");
 }
-// username/password required unless role is RESIDENT (Google login only,
-// email required instead — src/lib/admin/validation.ts's
-// validateResidentEmail enforces @rmu.ac.th server-side too).
+// Every role is created by email now (Google login only — no username/
+// password creation step; src/lib/admin/validation.ts's validateRmuEmail
+// enforces @rmu.ac.th server-side too). username/password still exist on
+// UpdateUserInput below for *editing* a pre-existing legacy account.
 export interface CreateUserInput {
   name: string;
-  username?: string;
-  password?: string;
-  email?: string;
+  email: string;
   role: RoleValue;
   zoneIds: string[]; // มีความหมายกับ role METER_READER เท่านั้น
   roomId?: string; // มีความหมายกับ role RESIDENT เท่านั้น

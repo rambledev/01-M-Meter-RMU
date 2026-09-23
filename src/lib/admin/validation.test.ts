@@ -3,7 +3,7 @@ import {
   isValidRole,
   validateOptionalString,
   validateRequiredString,
-  validateResidentEmail,
+  validateRmuEmail,
   validateZoneIds,
 } from "./validation";
 
@@ -79,18 +79,18 @@ describe("validateZoneIds", () => {
   });
 });
 
-describe("validateResidentEmail", () => {
+describe("validateRmuEmail", () => {
   it("accepts an @rmu.ac.th email and lowercases it", () => {
-    expect(validateResidentEmail("Somchai@RMU.ac.th")).toBe("somchai@rmu.ac.th");
+    expect(validateRmuEmail("Somchai@RMU.ac.th")).toBe("somchai@rmu.ac.th");
   });
 
   it("rejects an email outside the rmu.ac.th domain", () => {
-    expect(validateResidentEmail("someone@gmail.com")).toBeNull();
+    expect(validateRmuEmail("someone@gmail.com")).toBeNull();
   });
 
   it("rejects empty/non-string values", () => {
-    expect(validateResidentEmail("")).toBeNull();
-    expect(validateResidentEmail(undefined)).toBeNull();
-    expect(validateResidentEmail(123)).toBeNull();
+    expect(validateRmuEmail("")).toBeNull();
+    expect(validateRmuEmail(undefined)).toBeNull();
+    expect(validateRmuEmail(123)).toBeNull();
   });
 });

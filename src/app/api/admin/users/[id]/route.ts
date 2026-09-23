@@ -8,7 +8,7 @@ import {
   isValidRole,
   validateOptionalString,
   validateRequiredString,
-  validateResidentEmail,
+  validateRmuEmail,
   validateZoneIds,
 } from "@/lib/admin/validation";
 
@@ -39,11 +39,11 @@ async function listUsers(): Promise<UserDTO[]> {
 // Password is optional here: a blank/absent value means "keep the current
 // password" — the edit form never shows or requires the existing one.
 // RESIDENT accounts have no password at all (Google login) — username/
-// password are only required for every other role EXCEPT a METER_READER
-// that signed up itself through /login's Google role picker (2026-09-16):
-// that account has an email + no username, same as a resident, and stays
-// that way here (its email is tied to its Google identity — not
-// user-editable through this form). `isApproved` is optional in the body:
+// password are only required for every other role EXCEPT an account that
+// already logs in via Google with no username (a self-service METER_READER
+// signup, or any role an Admin created through the email-based POST above,
+// 2026-09-23): that account's email is tied to its Google identity — not
+// user-editable through this form. `isApproved` is optional in the body:
 // admins use this same edit form to approve a pending self-service
 // signup (and, for METER_READER, assign zones) in one save.
 export async function PATCH(
@@ -65,24 +65,23 @@ export async function PATCH(
   if (!zoneIds) return apiError(400, "VALIDATION_ERROR", "โซนที่รับผิดชอบไม่ถูกต้อง");
 
   const isResident = body.role === "RESIDENT";
-  const isGoogleMeterReader =
-    !isResident && existing.role === "METER_READER" && existing.email !== null && existing.username === null;
+  const isEmailIdentity = !isResident && existing.email !== null && existing.username === null;
 
   const email = isResident
-    ? validateResidentEmail(body?.email)
-    : isGoogleMeterReader
+    ? validateRmuEmail(body?.email)
+    : isEmailIdentity
       ? existing.email
       : null;
-  const username = isResident || isGoogleMeterReader ? null : validateRequiredString(body?.username);
+  const username = isResident || isEmailIdentity ? null : validateRequiredString(body?.username);
   if (isResident && !email) {
     return apiError(400, "VALIDATION_ERROR", "กรุณาระบุอีเมล @rmu.ac.th ให้ถูกต้อง");
   }
-  if (!isResident && !isGoogleMeterReader && !username) {
+  if (!isResident && !isEmailIdentity && !username) {
     return apiError(400, "VALIDATION_ERROR", "กรุณาระบุ Username");
   }
 
   const newPassword =
-    isResident || isGoogleMeterReader ? null : validateRequiredString(body?.password);
+    isResident || isEmailIdentity ? null : validateRequiredString(body?.password);
   const isApproved = typeof body?.isApproved === "boolean" ? body.isApproved : undefined;
 
   try {

@@ -122,12 +122,15 @@ export default function UserManagement() {
     }));
   }
 
-  // A METER_READER that signed up itself via /login's Google role picker
-  // (src/app/api/auth/register) has an email but no username — same
-  // signal the PATCH route uses server-side. Its email is tied to its
-  // Google identity, so this form never sends username/password for it.
-  const isGoogleMeterReader =
-    editingUser?.role === "METER_READER" &&
+  // Any non-RESIDENT account that already has an email but no username —
+  // either a METER_READER that signed up itself via /login's Google role
+  // picker (src/app/api/auth/register), or any role an Admin assigned by
+  // email through the "+ กำหนดบทบาทด้วย Email" flow below — same signal
+  // the PATCH route uses server-side. Its email is tied to its Google
+  // identity, so this form never sends username/password for it.
+  const isEmailIdentity =
+    editingUser !== null &&
+    editingUser.role !== "RESIDENT" &&
     editingUser.email !== null &&
     editingUser.username === null;
 
@@ -145,7 +148,7 @@ export default function UserManagement() {
           isApproved: form.isApproved,
           ...(isResident
             ? { email: form.email }
-            : isGoogleMeterReader
+            : isEmailIdentity
               ? {}
               : {
                   username: form.username,
@@ -153,14 +156,13 @@ export default function UserManagement() {
                 }),
         });
       } else {
+        // Creating is always email + role now — see the button/modal below.
         await createUser({
           name: form.name,
+          email: form.email,
           role: form.role,
           zoneIds: form.zoneIds,
           roomId: form.roomId || undefined,
-          ...(isResident
-            ? { email: form.email }
-            : { username: form.username, password: form.password }),
         });
       }
       await refresh();
@@ -218,7 +220,7 @@ export default function UserManagement() {
           onClick={openAddModal}
           className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
         >
-          + เพิ่มผู้ใช้งาน
+          + กำหนดบทบาทด้วย Email
         </button>
       </div>
 
@@ -299,7 +301,7 @@ export default function UserManagement() {
       </div>
 
       {modalOpen && (
-        <Modal title={editingId ? "แก้ไขผู้ใช้งาน" : "เพิ่มผู้ใช้งาน"} onClose={closeModal}>
+        <Modal title={editingId ? "แก้ไขผู้ใช้งาน" : "กำหนดบทบาทด้วย Email"} onClose={closeModal}>
           <div className="flex flex-col gap-2">
             <input
               value={form.name}
@@ -307,7 +309,7 @@ export default function UserManagement() {
               placeholder="ชื่อ-สกุล"
               className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             />
-            {form.role === "RESIDENT" ? (
+            {!editingId || form.role === "RESIDENT" ? (
               <input
                 type="email"
                 value={form.email}
@@ -315,7 +317,7 @@ export default function UserManagement() {
                 placeholder="อีเมล (@rmu.ac.th) — สำหรับเข้าสู่ระบบด้วย Google"
                 className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
               />
-            ) : isGoogleMeterReader ? (
+            ) : isEmailIdentity ? (
               <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
                 เข้าสู่ระบบด้วย Google: {form.email}
               </p>
@@ -331,7 +333,7 @@ export default function UserManagement() {
                   type="password"
                   value={form.password}
                   onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                  placeholder={editingId ? "รหัสผ่านใหม่ (เว้นว่างไว้หากไม่เปลี่ยน)" : "Password"}
+                  placeholder="รหัสผ่านใหม่ (เว้นว่างไว้หากไม่เปลี่ยน)"
                   className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
                 />
               </>
@@ -417,7 +419,7 @@ export default function UserManagement() {
                 disabled={busy}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
               >
-                {editingId ? "บันทึกการแก้ไข" : "เพิ่มผู้ใช้งาน"}
+                {editingId ? "บันทึกการแก้ไข" : "กำหนดบทบาท"}
               </button>
               <button
                 type="button"
