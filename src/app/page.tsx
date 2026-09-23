@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useState } from "react";
+import FtAnnouncements from "@/components/FtAnnouncements";
 import GoogleSignInButton from "@/components/resident/GoogleSignInButton";
 import { saveAdminSession } from "@/lib/admin/adminSession";
 import { loginWithGoogle, registerWithGoogle, type SelfServiceRole } from "@/lib/auth/authApi";
@@ -182,14 +184,23 @@ export default function Home() {
     <div className="flex flex-1 flex-col items-center justify-center bg-linear-to-b from-emerald-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
       <div className="flex w-full max-w-md flex-col items-center gap-8 text-center">
         <header className="flex flex-col items-center gap-2">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-2xl shadow-sm">
-            ⚡
+          <span className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-emerald-600 shadow-sm">
+            <Image
+              src="/meter.png"
+              alt="โลโก้ระบบ"
+              width={150}
+              height={150}
+              className="h-full w-full object-cover"
+              priority
+            />
           </span>
           <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
             ระบบบริหารจัดการค่าสาธารณูปโภค
           </h1>
           <p className="text-sm text-zinc-500">กลุ่มงานอาคารสถานที่และบริการ</p>
         </header>
+
+        <FtAnnouncements />
 
         <section className="flex w-full flex-col items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -368,7 +379,7 @@ export default function Home() {
 
         <footer className="flex flex-col gap-0.5 text-xs text-zinc-400">
           <p>พัฒนาโดย เตโชธ์ เขตอนันต์</p>
-          <p>นักวิชาการคอมพิวเตอร์</p>
+          <p>ฝ่ายพัฒนาระบบเทคโนโลยีสารสนเทศ</p>
           <p>ศูนย์เทคโนโลยีดิจิทัลและนวัตกรรม สำนักงานอธิการบดี</p>
         </footer>
       </div>
