@@ -1,6 +1,11 @@
 "use client";
 
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import {
+  getStoredCameraPermission,
+  saveCameraPermission,
+  type CameraPermissionState,
+} from "@/lib/camera/cameraPermission";
 import { useCameraQuality } from "@/lib/image/useCameraQuality";
 import { DEFAULT_OCR_REGION, type OcrRegion } from "@/lib/ocr/ocrRegion";
 import { useLiveOcr, type LiveOcrState, type OcrDebugSnapshot } from "@/lib/ocr/useLiveOcr";
@@ -65,6 +70,7 @@ export default function MeterCamera({
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [permission, setPermission] = useState<CameraPermissionState>("unknown");
 
   useEffect(() => {
     if (allowAdjust && process.env.NODE_ENV === "development") {
@@ -73,6 +79,50 @@ export default function MeterCamera({
       );
     }
   }, [allowAdjust]);
+
+  // Proactive permission check (2026-09-25) — before the user even taps the
+  // shutter button, find out whether the camera is already
+  // granted/denied so a known denial can show a helpful message right
+  // away instead of waiting for a failed getUserMedia() call. Starts from
+  // the cached localStorage value (works everywhere, including Safari/
+  // iOS), then prefers the browser's own live Permissions API state where
+  // supported — that API is what actually triggers/reflects the "ขอ
+  // อนุญาตใช้กล้อง" prompt; this component never calls getUserMedia here,
+  // only queries the already-known state.
+  useEffect(() => {
+    setPermission(getStoredCameraPermission());
+    if (!navigator.permissions?.query) return;
+
+    let cancelled = false;
+    let status: PermissionStatus | null = null;
+
+    function handleChange(this: PermissionStatus) {
+      if (cancelled) return;
+      const state = this.state as CameraPermissionState;
+      setPermission(state);
+      if (state === "granted" || state === "denied") saveCameraPermission(state);
+    }
+
+    navigator.permissions
+      .query({ name: "camera" as PermissionName })
+      .then((result) => {
+        if (cancelled) return;
+        status = result;
+        const state = result.state as CameraPermissionState;
+        setPermission(state);
+        if (state === "granted" || state === "denied") saveCameraPermission(state);
+        status.addEventListener("change", handleChange);
+      })
+      .catch(() => {
+        // "camera" isn't a recognized descriptor on this browser (Safari) —
+        // keep whatever the localStorage cache already said.
+      });
+
+    return () => {
+      cancelled = true;
+      status?.removeEventListener("change", handleChange);
+    };
+  }, []);
 
   function stopStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -130,9 +180,15 @@ export default function MeterCamera({
         await videoRef.current.play();
       }
       setPhase("streaming");
+      setPermission("granted");
+      saveCameraPermission("granted");
     } catch (err) {
       setPhase("error");
       setErrorMessage(cameraErrorMessage(err));
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        setPermission("denied");
+        saveCameraPermission("denied");
+      }
     }
   }
 
@@ -169,6 +225,13 @@ export default function MeterCamera({
 
   return (
     <div className="flex flex-col gap-2">
+      {phase !== "streaming" && permission === "denied" && (
+        <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          ยังไม่ได้รับอนุญาตให้ใช้กล้อง กรุณาเปิดสิทธิ์การใช้กล้องในการตั้งค่าเบราว์เซอร์ แล้วลองอีกครั้ง
+          หรือเลือกภาพจากเครื่องแทน
+        </p>
+      )}
+
       {phase !== "streaming" && (
         <button
           type="button"
