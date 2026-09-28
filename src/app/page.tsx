@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useState } from "react";
+import ChromeRequiredDialog from "@/components/ChromeRequiredDialog";
 import FtAnnouncements from "@/components/FtAnnouncements";
+import InstallShortcutButton from "@/components/InstallShortcutButton";
 import GoogleSignInButton from "@/components/resident/GoogleSignInButton";
 import { saveAdminSession } from "@/lib/admin/adminSession";
 import { loginWithGoogle, registerWithGoogle, type SelfServiceRole } from "@/lib/auth/authApi";
@@ -182,6 +184,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-linear-to-b from-emerald-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
+      <ChromeRequiredDialog />
       <div className="flex w-full max-w-md flex-col items-center gap-8 text-center">
         <header className="flex flex-col items-center gap-2">
           <span className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-emerald-600 shadow-sm">
@@ -376,6 +379,8 @@ export default function Home() {
 
           {error && <p className="text-sm font-medium text-red-600">{error}</p>}
         </section>
+
+        <InstallShortcutButton />
 
         <footer className="flex flex-col gap-0.5 text-xs text-zinc-400">
           <p>พัฒนาโดย เตโชธ์ เขตอนันต์</p>
