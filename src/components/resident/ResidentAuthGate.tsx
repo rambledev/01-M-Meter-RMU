@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { loginResidentWithGoogle } from "@/lib/resident/residentAuthApi";
 import {
@@ -20,6 +21,7 @@ export default function ResidentAuthGate({
 }: {
   children: (session: ResidentSession, logout: () => void) => ReactNode;
 }) {
+  const router = useRouter();
   const [session, setSession] = useState<ResidentSession | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,6 +40,7 @@ export default function ResidentAuthGate({
   function logout() {
     clearResidentSession();
     setSession(null);
+    router.push("/");
   }
 
   async function handleCredential(credential: string) {

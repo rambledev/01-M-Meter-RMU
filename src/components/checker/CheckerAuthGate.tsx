@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { loginChecker } from "@/lib/checker/checkerAuthApi";
 import {
@@ -34,6 +35,7 @@ export default function CheckerAuthGate({
 }: {
   children: (session: CheckerSession, logout: () => void) => ReactNode;
 }) {
+  const router = useRouter();
   const [session, setSession] = useState<CheckerSession | null | undefined>(undefined);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -76,6 +78,7 @@ export default function CheckerAuthGate({
   function logout() {
     clearCheckerSession();
     setSession(null);
+    router.push("/");
   }
 
   async function handleLogin() {
