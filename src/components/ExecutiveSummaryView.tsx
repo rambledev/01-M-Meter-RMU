@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -18,11 +18,17 @@ import {
 } from "recharts";
 import { fetchExecutiveSummary } from "@/lib/executive/executiveApi";
 import type { ExecutiveSummary } from "@/lib/executive/types";
+import { getMockExecutiveSummary } from "@/lib/mock/mockData";
+import { useMockMode } from "@/lib/mock/mockMode";
 import {
   READING_STATUS_LABEL,
   type ReadingStatusValue,
 } from "@/lib/reading/readingStatusLabels";
 
+// Fixed/semantic — same status meaning everywhere this chart renders
+// (standalone on /executive, or embedded in AdminSummary under /admin's
+// red theme), so these never swap with the role color; matches
+// src/lib/reading/readingStatusLabels.ts's own status color convention.
 const STATUS_CHART_COLOR: Record<ReadingStatusValue, string> = {
   DRAFT: "#a1a1aa",
   PENDING_SYNC: "#f59e0b",
@@ -33,6 +39,17 @@ const STATUS_CHART_COLOR: Record<ReadingStatusValue, string> = {
 
 const GRID_STROKE = "#71717a33";
 const AXIS_COLOR = "#71717a";
+
+// Data-series colors (2026-10-08 pastel/formal re-theme) — a fixed
+// qualitative palette distinguishing the 4 chart series, independent of
+// role brand color for the same reason as STATUS_CHART_COLOR above.
+// Muted/pastel versions of the original hues, keeping the same original
+// pairing (usage+cost as a teal-green pair, count+zone-usage as a
+// gold-terracotta pair).
+const USAGE_TREND_COLOR = "#5a9c7a";
+const COST_TREND_COLOR = "#3f7a78";
+const READING_COUNT_COLOR = "#a89144";
+const ZONE_USAGE_COLOR = "#b97d4b";
 
 function thb(n: number): string {
   return n.toLocaleString("th-TH", { maximumFractionDigits: 2 });
@@ -57,20 +74,42 @@ function formatCountTooltip(value: unknown): string {
 // render the exact same report from one place — no separate copy of the
 // KPI/chart logic. Callers own their own page/tab chrome (title, back link,
 // container) — this component is just the filter + KPI + chart body.
+const PERIOD_OPTIONS = [
+  { label: "รายเดือน", months: 1 },
+  { label: "3 เดือน", months: 3 },
+  { label: "6 เดือน", months: 6 },
+  { label: "1 ปี", months: 12 },
+] as const;
+
 export default function ExecutiveSummaryView() {
+  const [mockMode] = useMockMode();
   const [zoneId, setZoneId] = useState<string>("");
-  const [summary, setSummary] = useState<ExecutiveSummary | null>(null);
+  // Windows the trend-over-time charts to the most recent N months —
+  // works the same way for real data (the API already returns every
+  // month with data, unbounded) and mock data (now a multi-year range,
+  // 2567-current) — pure client-side slicing, no extra fetch either way.
+  // zoneBreakdown/statusBreakdown stay all-time regardless (see their own
+  // chart titles — "สะสมทั้งหมด").
+  const [periodMonths, setPeriodMonths] = useState<number>(12);
+  // Mock data is a pure, synchronous computation — derived directly during
+  // render via useMemo, never through setState-in-an-effect.
+  const mockSummary = useMemo(
+    () => (mockMode ? getMockExecutiveSummary(zoneId || undefined) : null),
+    [mockMode, zoneId],
+  );
+  const [fetchedSummary, setFetchedSummary] = useState<ExecutiveSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (mockMode) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
       try {
         const data = await fetchExecutiveSummary(zoneId || undefined);
-        if (!cancelled) setSummary(data);
+        if (!cancelled) setFetchedSummary(data);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
@@ -82,15 +121,40 @@ export default function ExecutiveSummaryView() {
     return () => {
       cancelled = true;
     };
-  }, [zoneId]);
+  }, [zoneId, mockMode]);
+
+  const summary = mockMode ? mockSummary : fetchedSummary;
+  const effectiveLoading = mockMode ? false : loading;
+  const effectiveError = mockMode ? null : error;
+  const windowedTrend = useMemo(
+    () => summary?.monthlyTrend.slice(-periodMonths) ?? [],
+    [summary, periodMonths],
+  );
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-zinc-300 p-1 dark:border-zinc-700">
+          {PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.months}
+              type="button"
+              onClick={() => setPeriodMonths(opt.months)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                periodMonths === opt.months
+                  ? "bg-primary-600 text-white"
+                  : "text-zinc-600 hover:bg-primary-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         <select
           value={zoneId}
           onChange={(e) => setZoneId(e.target.value)}
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
         >
           <option value="">ทุกโซน</option>
           {summary?.zones.map((z) => (
@@ -101,14 +165,14 @@ export default function ExecutiveSummaryView() {
         </select>
       </div>
 
-      {loading && <p className="text-sm text-zinc-500">กำลังโหลด...</p>}
-      {error && (
+      {effectiveLoading && <p className="text-sm text-zinc-500">กำลังโหลด...</p>}
+      {effectiveError && (
         <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">
-          {error}
+          {effectiveError}
         </p>
       )}
 
-      {summary && !loading && !error && (
+      {summary && !effectiveLoading && !effectiveError && (
         <>
           {/* KPI cards */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -129,11 +193,11 @@ export default function ExecutiveSummaryView() {
           {/* Chart grid */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ChartCard title="แนวโน้มการใช้ไฟฟ้า (หน่วย/เดือน)">
-              {summary.monthlyTrend.length === 0 ? (
+              {windowedTrend.length === 0 ? (
                 <EmptyChartNote />
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={summary.monthlyTrend}>
+                  <LineChart data={windowedTrend}>
                     <CartesianGrid stroke={GRID_STROKE} />
                     <XAxis dataKey="periodLabel" stroke={AXIS_COLOR} fontSize={12} />
                     <YAxis stroke={AXIS_COLOR} fontSize={12} />
@@ -142,7 +206,7 @@ export default function ExecutiveSummaryView() {
                       type="monotone"
                       dataKey="totalUsage"
                       name="หน่วยไฟที่ใช้"
-                      stroke="#059669"
+                      stroke={USAGE_TREND_COLOR}
                       strokeWidth={2}
                       dot={{ r: 3 }}
                     />
@@ -152,11 +216,11 @@ export default function ExecutiveSummaryView() {
             </ChartCard>
 
             <ChartCard title="แนวโน้มค่าไฟ (บาท/เดือน)">
-              {summary.monthlyTrend.length === 0 ? (
+              {windowedTrend.length === 0 ? (
                 <EmptyChartNote />
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={summary.monthlyTrend}>
+                  <LineChart data={windowedTrend}>
                     <CartesianGrid stroke={GRID_STROKE} />
                     <XAxis dataKey="periodLabel" stroke={AXIS_COLOR} fontSize={12} />
                     <YAxis stroke={AXIS_COLOR} fontSize={12} />
@@ -165,7 +229,7 @@ export default function ExecutiveSummaryView() {
                       type="monotone"
                       dataKey="totalBilling"
                       name="ค่าไฟ"
-                      stroke="#0d9488"
+                      stroke={COST_TREND_COLOR}
                       strokeWidth={2}
                       dot={{ r: 3 }}
                     />
@@ -175,16 +239,16 @@ export default function ExecutiveSummaryView() {
             </ChartCard>
 
             <ChartCard title="จำนวนรายการจดมิเตอร์ต่อเดือน">
-              {summary.monthlyTrend.length === 0 ? (
+              {windowedTrend.length === 0 ? (
                 <EmptyChartNote />
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={summary.monthlyTrend}>
+                  <BarChart data={windowedTrend}>
                     <CartesianGrid stroke={GRID_STROKE} />
                     <XAxis dataKey="periodLabel" stroke={AXIS_COLOR} fontSize={12} />
                     <YAxis stroke={AXIS_COLOR} fontSize={12} allowDecimals={false} />
                     <Tooltip formatter={formatCountTooltip} />
-                    <Bar dataKey="readingCount" name="จำนวนรายการ" fill="#65a30d" radius={4} />
+                    <Bar dataKey="readingCount" name="จำนวนรายการ" fill={READING_COUNT_COLOR} radius={4} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -200,7 +264,7 @@ export default function ExecutiveSummaryView() {
                     <XAxis dataKey="zoneName" stroke={AXIS_COLOR} fontSize={12} />
                     <YAxis stroke={AXIS_COLOR} fontSize={12} />
                     <Tooltip formatter={formatUnitTooltip} />
-                    <Bar dataKey="totalUsage" name="หน่วยไฟที่ใช้" fill="#d97706" radius={4} />
+                    <Bar dataKey="totalUsage" name="หน่วยไฟที่ใช้" fill={ZONE_USAGE_COLOR} radius={4} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -255,7 +319,7 @@ function KpiCard({
       className={`flex flex-col gap-1 rounded-xl border-t-4 border bg-white p-4 shadow-sm dark:bg-zinc-900 ${
         tone === "warning"
           ? "border-t-amber-500 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
-          : "border-t-emerald-500 border-zinc-200 dark:border-zinc-800"
+          : "border-t-primary-500 border-zinc-200 dark:border-zinc-800"
       }`}
     >
       <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{value}</span>
@@ -267,7 +331,7 @@ function KpiCard({
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-400">{title}</p>
+      <p className="text-sm font-semibold text-primary-800 dark:text-primary-400">{title}</p>
       {children}
     </div>
   );

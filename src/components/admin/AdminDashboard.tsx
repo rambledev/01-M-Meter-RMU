@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import MonthYearSelect from "@/components/MonthYearSelect";
+import MockDataToggle from "@/components/admin/MockDataToggle";
 import { fetchDashboard, listMissingReadings, listZones } from "@/lib/admin/adminApi";
 import type { AdminDashboardSummary, MissingReadingDTO, ZoneDTO } from "@/lib/admin/types";
+import { getMockDashboardSummary } from "@/lib/mock/mockData";
+import { useMockMode } from "@/lib/mock/mockMode";
 import { currentMonthValue } from "@/lib/reading/readingMonth";
 import { formatReadingPeriod } from "@/lib/admin/period";
 
@@ -18,15 +21,24 @@ const CARDS: { key: keyof AdminDashboardSummary; label: string }[] = [
 ];
 
 export default function AdminDashboard() {
-  const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
+  const [mockMode] = useMockMode();
+  // Mock data is a pure, synchronous computation — derived directly during
+  // render via useMemo, never through setState-in-an-effect, so turning
+  // the toggle on/off never needs a render-then-fetch round trip.
+  const mockSummary = useMemo(
+    () => (mockMode ? getMockDashboardSummary() : null),
+    [mockMode],
+  );
+  const [fetchedSummary, setFetchedSummary] = useState<AdminDashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (mockMode) return;
     let cancelled = false;
     (async () => {
       try {
         const data = await fetchDashboard();
-        if (!cancelled) setSummary(data);
+        if (!cancelled) setFetchedSummary(data);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
@@ -36,9 +48,11 @@ export default function AdminDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mockMode]);
 
-  if (error) {
+  const summary = mockMode ? mockSummary : fetchedSummary;
+
+  if (error && !mockMode) {
     return <p className="text-sm font-medium text-red-600">{error}</p>;
   }
   if (!summary) {
@@ -47,6 +61,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex flex-col gap-8">
+      <MockDataToggle />
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {CARDS.map((card) => (
           <div
@@ -54,7 +70,7 @@ export default function AdminDashboard() {
             className={`flex flex-col gap-1 rounded-xl border-t-4 border bg-white p-4 shadow-sm dark:bg-zinc-900 ${
               card.key === "syncErrorCount" && summary[card.key] > 0
                 ? "border-t-red-500 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
-                : "border-t-emerald-500 border-zinc-200 dark:border-zinc-800"
+                : "border-t-primary-500 border-zinc-200 dark:border-zinc-800"
             }`}
           >
             <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
@@ -65,7 +81,13 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      <MissingReadingsPanel />
+      {mockMode ? (
+        <p className="rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-500 dark:bg-zinc-800">
+          ปิดใช้งาน &quot;ห้องที่ยังไม่จดมิเตอร์ประจำเดือน&quot; ชั่วคราวขณะแสดงข้อมูลตัวอย่าง
+        </p>
+      ) : (
+        <MissingReadingsPanel />
+      )}
     </div>
   );
 }
@@ -122,7 +144,7 @@ function MissingReadingsPanel() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-emerald-800 dark:text-emerald-400">ห้องที่ยังไม่จดมิเตอร์ประจำเดือน</h3>
+      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">ห้องที่ยังไม่จดมิเตอร์ประจำเดือน</h3>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <MonthYearSelect value={monthValue} onChange={setMonthValue} />
@@ -173,7 +195,7 @@ function MissingReadingsPanel() {
                 </tr>
               )}
               {filtered.map((m) => (
-                <tr key={m.meterId} className="border-t border-zinc-200 transition-colors hover:bg-emerald-50/60 dark:border-zinc-800 dark:hover:bg-emerald-950/10">
+                <tr key={m.meterId} className="border-t border-zinc-200 transition-colors hover:bg-primary-50/60 dark:border-zinc-800 dark:hover:bg-primary-950/10">
                   <td className="p-2">{m.roomName}</td>
                   <td className="p-2">{m.zoneName}</td>
                   <td className="p-2 font-semibold">{m.meterCode}</td>

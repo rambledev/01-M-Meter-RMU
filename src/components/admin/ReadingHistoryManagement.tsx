@@ -3,6 +3,8 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { listReadingHistory, listZones } from "@/lib/admin/adminApi";
 import type { ReadingHistoryDTO, ZoneDTO } from "@/lib/admin/types";
+import { getMockReadingHistory, getMockZones } from "@/lib/mock/mockData";
+import { useMockMode } from "@/lib/mock/mockMode";
 import {
   READING_STATUS_COLOR,
   READING_STATUS_LABEL,
@@ -43,8 +45,15 @@ interface MeterSummary {
 // reading history for just that meter (Phase kickoff, 2026-09-04). Data
 // comes from PostgreSQL only, read-only (no edit/delete here).
 export default function ReadingHistoryManagement() {
-  const [readings, setReadings] = useState<ReadingHistoryDTO[]>([]);
-  const [zones, setZones] = useState<ZoneDTO[]>([]);
+  const [mockMode] = useMockMode();
+  // Mock data is a pure, synchronous computation — derived directly during
+  // render via useMemo, never through setState-in-an-effect.
+  const mockData = useMemo(
+    () => (mockMode ? { readings: getMockReadingHistory(), zones: getMockZones() } : null),
+    [mockMode],
+  );
+  const [fetchedReadings, setFetchedReadings] = useState<ReadingHistoryDTO[]>([]);
+  const [fetchedZones, setFetchedZones] = useState<ZoneDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,13 +62,14 @@ export default function ReadingHistoryManagement() {
   const [expandedMeterId, setExpandedMeterId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (mockMode) return;
     let cancelled = false;
     (async () => {
       try {
         const [readingData, zoneData] = await Promise.all([listReadingHistory(), listZones()]);
         if (!cancelled) {
-          setReadings(readingData);
-          setZones(zoneData);
+          setFetchedReadings(readingData);
+          setFetchedZones(zoneData);
         }
       } catch (err) {
         if (!cancelled) {
@@ -72,7 +82,14 @@ export default function ReadingHistoryManagement() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mockMode]);
+
+  const emptyReadings = useMemo<ReadingHistoryDTO[]>(() => [], []);
+  const emptyZones = useMemo<ZoneDTO[]>(() => [], []);
+  const readings = mockMode ? (mockData?.readings ?? emptyReadings) : fetchedReadings;
+  const zones = mockMode ? (mockData?.zones ?? emptyZones) : fetchedZones;
+  const effectiveLoading = mockMode ? false : loading;
+  const effectiveError = mockMode ? null : error;
 
   // readings are already sorted newest-first by the API (orderBy readingMonth desc)
   const summaries = useMemo<MeterSummary[]>(() => {
@@ -112,16 +129,16 @@ export default function ReadingHistoryManagement() {
       .sort((a, b) => b.latestReadingMonth.localeCompare(a.latestReadingMonth));
   }, [summaries, zoneFilter, search]);
 
-  if (error) {
-    return <p className="text-sm font-medium text-red-600">{error}</p>;
+  if (effectiveError) {
+    return <p className="text-sm font-medium text-red-600">{effectiveError}</p>;
   }
-  if (loading) {
+  if (effectiveLoading) {
     return <p className="text-sm text-zinc-500">กำลังโหลด...</p>;
   }
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-emerald-800 dark:text-emerald-400">ประวัติการจดมิเตอร์</h3>
+      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">ประวัติการจดมิเตอร์</h3>
       <p className="text-xs text-zinc-500">รูปแบบรอบ: เดือน (2 หลัก)/ปี พ.ศ. เช่น 01/2569 = มกราคม 2569</p>
 
       <div className="flex flex-col gap-2 sm:flex-row">
@@ -174,7 +191,7 @@ export default function ReadingHistoryManagement() {
                 .sort((a, b) => b.readingMonth.localeCompare(a.readingMonth));
               return (
                 <Fragment key={s.meterId}>
-                  <tr className="border-t border-zinc-200 transition-colors hover:bg-emerald-50/60 dark:border-zinc-800 dark:hover:bg-emerald-950/10">
+                  <tr className="border-t border-zinc-200 transition-colors hover:bg-primary-50/60 dark:border-zinc-800 dark:hover:bg-primary-950/10">
                     <td className="p-2 font-semibold">{s.meterCode}</td>
                     <td className="p-2">{s.roomName}</td>
                     <td className="p-2">{s.zoneName}</td>
@@ -216,7 +233,7 @@ export default function ReadingHistoryManagement() {
                             </thead>
                             <tbody>
                               {history.map((r) => (
-                                <tr key={r.id} className="border-t border-zinc-200 transition-colors hover:bg-emerald-50/60 dark:border-zinc-800 dark:hover:bg-emerald-950/10">
+                                <tr key={r.id} className="border-t border-zinc-200 transition-colors hover:bg-primary-50/60 dark:border-zinc-800 dark:hover:bg-primary-950/10">
                                   <td className="p-1 font-semibold">{r.period}</td>
                                   <td className="p-1">{fmt(r.previousValue)}</td>
                                   <td className="p-1">{fmt(r.currentValue)}</td>

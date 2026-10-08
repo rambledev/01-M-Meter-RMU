@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import BillingBreakdownPanel from "@/components/BillingBreakdownPanel";
 import BillingExplanation from "@/components/BillingExplanation";
 import FtAnnouncements from "@/components/FtAnnouncements";
 import MonthYearSelect from "@/components/MonthYearSelect";
 import ResidentAuthGate from "@/components/resident/ResidentAuthGate";
+import ResidentUsageHistory from "@/components/resident/ResidentUsageHistory";
+import BillingBreakdownPanel from "@/components/BillingBreakdownPanel";
 import { fetchBillingConfig } from "@/lib/billing/billingConfigApi";
 import { fetchFtForMonth } from "@/lib/billing/ftApi";
 import type { BillingConfig } from "@/lib/billing/types";
+import { getMockResidentHistory } from "@/lib/mock/mockData";
+import { useMockMode } from "@/lib/mock/mockMode";
 import { currentMonthValue } from "@/lib/reading/readingMonth";
 import { fetchResidentHistory } from "@/lib/resident/residentHistoryApi";
 import { fetchRoomOptions, setResidentRoom } from "@/lib/resident/residentRoomApi";
@@ -49,17 +52,26 @@ export default function ResidentPage() {
 }
 
 function ResidentHome({ session, logout }: { session: ResidentSession; logout: () => void }) {
+  const [mockMode] = useMockMode();
   const [room, setRoom] = useState<ResidentRoomRef | null>(session.room);
 
-  const [history, setHistory] = useState<ResidentHistoryDTO | null>(null);
+  // Mock data is a pure, synchronous computation — derived directly during
+  // render via useMemo, never through setState-in-an-effect. Mock mode
+  // skips fetchBillingConfig()/fetchFtForMonth()/fetchResidentHistory()
+  // entirely below — none of them run, so nothing here ever touches the
+  // database while it's on.
+  const mockHistory = useMemo(() => (mockMode ? getMockResidentHistory() : null), [mockMode]);
+
+  const [fetchedHistory, setFetchedHistory] = useState<ResidentHistoryDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [monthValue, setMonthValue] = useState(currentMonthValue());
   const [billingConfig, setBillingConfig] = useState<BillingConfig | null>(null);
 
   useEffect(() => {
+    if (mockMode) return;
     fetchBillingConfig().then(setBillingConfig);
-  }, []);
+  }, [mockMode]);
 
   // Ft resolved for the selected month specifically (2026-09-17) — the
   // resident's own history table below already gets its per-reading Ft via
@@ -68,6 +80,7 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
   const [resolvedFtRate, setResolvedFtRate] = useState<number | null>(null);
 
   useEffect(() => {
+    if (mockMode) return;
     let cancelled = false;
     fetchFtForMonth(monthValue).then((rate) => {
       if (!cancelled) setResolvedFtRate(rate);
@@ -75,9 +88,10 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
     return () => {
       cancelled = true;
     };
-  }, [monthValue]);
+  }, [monthValue, mockMode]);
 
   useEffect(() => {
+    if (mockMode) return;
     let cancelled = false;
     (async () => {
       if (!room) {
@@ -88,7 +102,7 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
       setError(null);
       try {
         const data = await fetchResidentHistory(session.id);
-        if (!cancelled) setHistory(data);
+        if (!cancelled) setFetchedHistory(data);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
       } finally {
@@ -98,58 +112,85 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
     return () => {
       cancelled = true;
     };
-  }, [session.id, room]);
+  }, [session.id, room, mockMode]);
 
   function handleRoomPicked(nextRoom: ResidentRoomRef) {
     setRoom(nextRoom);
     saveResidentSession({ ...session, room: nextRoom });
   }
 
+  const history = mockMode ? mockHistory : fetchedHistory;
+  const effectiveLoading = mockMode ? false : loading;
+  const effectiveError = mockMode ? null : error;
+  const displayRoom = mockMode ? (mockHistory?.room ?? null) : room;
+  const showRoomPicker = !mockMode && !room;
+
   const selectedReading = useMemo(
     () => history?.readings.find((r) => r.readingMonth === monthValue) ?? null,
     [history, monthValue],
   );
 
+  // "ประวัติการใช้งาน" below shows one calendar year at a time, by
+  // explicit request — a long-term resident's full history (real or the
+  // mock window) otherwise just keeps growing. Year options come from
+  // whatever years actually appear in this resident's own data (not a
+  // fixed/guessed range), newest first; defaults to the current year.
+  // The month picker/detail panel above is unaffected — that's for
+  // looking up one specific past bill, any year, not an overview list.
+  const currentYearPrefix = useMemo(() => String(new Date().getFullYear()), []);
+  const availableYears = useMemo(() => {
+    const years = new Set((history?.readings ?? []).map((r) => r.readingMonth.slice(0, 4)));
+    years.add(currentYearPrefix);
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [history, currentYearPrefix]);
+  const [selectedYear, setSelectedYear] = useState(currentYearPrefix);
+  const yearReadings = useMemo(
+    () => history?.readings.filter((r) => r.readingMonth.startsWith(selectedYear)) ?? [],
+    [history, selectedYear],
+  );
+
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-1 border-b-2 border-emerald-600 pb-3">
+      <header className="flex flex-col gap-1 border-b-2 border-primary-600 pb-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-emerald-800 dark:text-emerald-400">
+          <h1 className="text-lg font-bold text-primary-800 dark:text-primary-400">
             สวัสดี, {session.name}
           </h1>
           <button
             type="button"
             onClick={logout}
-            className="shrink-0 text-xs font-medium text-emerald-700 underline dark:text-emerald-400"
+            className="shrink-0 text-xs font-medium text-primary-700 underline dark:text-primary-400"
           >
             ออกจากระบบ
           </button>
         </div>
         <p className="text-xs text-zinc-400">{session.email}</p>
         <p className="text-sm text-zinc-500">
-          {room ? `ห้อง ${room.name} · โซน ${room.zoneName}` : "ยังไม่ได้เลือกห้องพัก"}
+          {displayRoom ? `ห้อง ${displayRoom.name} · โซน ${displayRoom.zoneName}` : "ยังไม่ได้เลือกห้องพัก"}
         </p>
       </header>
 
       <FtAnnouncements />
 
-      {!room && <RoomPicker userId={session.id} onPicked={handleRoomPicked} />}
+      {showRoomPicker && <RoomPicker userId={session.id} onPicked={handleRoomPicked} />}
 
-      {room && (
+      {!showRoomPicker && (
         <>
-          {loading && <p className="text-sm text-zinc-500">กำลังโหลด...</p>}
-          {error && (
-            <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">{error}</p>
+          {effectiveLoading && <p className="text-sm text-zinc-500">กำลังโหลด...</p>}
+          {effectiveError && (
+            <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">
+              {effectiveError}
+            </p>
           )}
 
-          {!loading && !error && history && (
+          {!effectiveLoading && !effectiveError && history && (
             <>
               <section className="flex flex-col gap-2">
                 <p className="text-sm font-semibold">เลือกเดือนดูค่าไฟ</p>
                 <MonthYearSelect value={monthValue} onChange={setMonthValue} />
               </section>
 
-              <section className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+              <section className="rounded-xl border border-primary-100 bg-primary-50/60 p-4 dark:border-primary-900 dark:bg-primary-950/20">
                 {selectedReading ? (
                   <div className="flex flex-col gap-2">
                     <p className="text-sm font-semibold">
@@ -167,15 +208,34 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
                       {READING_STATUS_LABEL[selectedReading.status as ReadingStatusValue] ??
                         selectedReading.status}
                     </span>
-                    {billingConfig && selectedReading.currentValue !== null && (
-                      <div className="mt-1 border-t border-emerald-200 pt-2 dark:border-emerald-900">
-                        <BillingBreakdownPanel
-                          confirmedValue={selectedReading.currentValue}
-                          previousReading={selectedReading.previousValue}
-                          config={billingConfig}
-                          resolvedFtRate={resolvedFtRate}
-                        />
+                    {mockMode && selectedReading.currentValue !== null ? (
+                      <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 border-t border-primary-200 pt-2 text-sm dark:border-primary-900">
+                        <span className="text-zinc-500">หน่วยที่ใช้</span>
+                        <span>{selectedReading.usage ?? "-"}</span>
+                        <span className="text-zinc-500">ค่าพื้นฐาน + FT</span>
+                        <span>
+                          {baht(
+                            (selectedReading.billing.baseCharge ?? 0) +
+                              (selectedReading.billing.ft ?? 0),
+                          )}
+                        </span>
+                        <span className="text-zinc-500">VAT</span>
+                        <span>{baht(selectedReading.billing.tax)}</span>
+                        <span className="font-semibold text-zinc-700 dark:text-zinc-300">ค่าไฟสุทธิ</span>
+                        <span className="font-semibold">{baht(selectedReading.billing.total)}</span>
                       </div>
+                    ) : (
+                      billingConfig &&
+                      selectedReading.currentValue !== null && (
+                        <div className="mt-1 border-t border-primary-200 pt-2 dark:border-primary-900">
+                          <BillingBreakdownPanel
+                            confirmedValue={selectedReading.currentValue}
+                            previousReading={selectedReading.previousValue}
+                            config={billingConfig}
+                            resolvedFtRate={resolvedFtRate}
+                          />
+                        </div>
+                      )
                     )}
                   </div>
                 ) : (
@@ -184,36 +244,21 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
               </section>
 
               <section className="flex flex-col gap-2">
-                <p className="text-sm font-semibold">ประวัติทั้งหมด</p>
-                {history.readings.length === 0 ? (
-                  <p className="text-sm text-zinc-500">ยังไม่มีประวัติการจดมิเตอร์</p>
-                ) : (
-                  <div className="overflow-x-auto rounded-xl border border-zinc-300 dark:border-zinc-700">
-                    <table className="w-full min-w-[420px] text-sm">
-                      <thead className="bg-zinc-100 dark:bg-zinc-900">
-                        <tr className="text-left">
-                          <th className="p-2">รอบ</th>
-                          <th className="p-2">มิเตอร์</th>
-                          <th className="p-2">หน่วยที่ใช้</th>
-                          <th className="p-2">ค่าไฟ</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {history.readings.map((r) => (
-                          <tr
-                            key={r.id}
-                            className="border-t border-zinc-200 transition-colors hover:bg-emerald-50/60 dark:border-zinc-800 dark:hover:bg-emerald-950/10"
-                          >
-                            <td className="p-2 font-semibold">{r.period}</td>
-                            <td className="p-2">{r.currentValue ?? "-"}</td>
-                            <td className="p-2">{r.usage ?? "-"}</td>
-                            <td className="p-2">{baht(r.billing.total)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">ประวัติการใช้งาน</p>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="rounded-lg border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                  >
+                    {availableYears.map((year) => (
+                      <option key={year} value={year}>
+                        ปี {Number(year) + 543}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <ResidentUsageHistory readings={yearReadings} />
               </section>
 
               {billingConfig && (
@@ -272,7 +317,7 @@ function RoomPicker({
   }
 
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30">
+    <section className="flex flex-col gap-2 rounded-xl border border-primary-300 bg-primary-50 p-4 dark:border-primary-800 dark:bg-primary-950/30">
       <p className="text-sm font-semibold">เลือกห้องพักของตัวเอง</p>
       <p className="text-xs text-zinc-500">
         ระบบยังไม่ทราบว่าอีเมลนี้พักห้องใด — กรุณาเลือกห้องของตัวเองเพื่อดูประวัติและค่าไฟ
@@ -301,7 +346,7 @@ function RoomPicker({
         type="button"
         onClick={handleConfirm}
         disabled={!selectedRoomId || saving}
-        className="self-start rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+        className="self-start rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
       >
         {saving ? "กำลังบันทึก..." : "ยืนยันห้องนี้"}
       </button>
