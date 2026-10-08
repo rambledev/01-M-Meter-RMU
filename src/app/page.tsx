@@ -183,11 +183,11 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-linear-to-b from-emerald-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
+    <div className="flex flex-1 flex-col items-center justify-center bg-linear-to-b from-primary-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
       <ChromeRequiredDialog />
       <div className="flex w-full max-w-md flex-col items-center gap-8 text-center">
         <header className="flex flex-col items-center gap-2">
-          <span className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-emerald-600 shadow-sm">
+          <span className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-primary-600 shadow-sm">
             <Image
               src="/meter.png"
               alt="โลโก้ระบบ"
@@ -227,7 +227,7 @@ export default function Home() {
                   key={opt.value}
                   type="button"
                   onClick={() => handlePickRole(opt.value)}
-                  className="rounded-lg border border-emerald-600 px-4 py-3 font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                  className="rounded-lg border border-primary-600 px-4 py-3 font-semibold text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950/30"
                 >
                   {opt.label}
                 </button>
@@ -296,7 +296,7 @@ export default function Home() {
                     type="button"
                     onClick={handleConfirmResident}
                     disabled={!selectedRoomId}
-                    className="rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 hover:bg-emerald-700"
+                    className="rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 hover:bg-primary-700"
                   >
                     ยืนยัน
                   </button>
@@ -306,7 +306,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleBackToRolePick}
-                className="text-sm font-medium text-emerald-700 underline dark:text-emerald-400"
+                className="text-sm font-medium text-primary-700 underline dark:text-primary-400"
               >
                 ← กลับไปเลือกบทบาท
               </button>
@@ -352,7 +352,7 @@ export default function Home() {
                     type="button"
                     onClick={handleConfirmChecker}
                     disabled={selectedCheckerZoneIds.length === 0}
-                    className="rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 hover:bg-emerald-700"
+                    className="rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 hover:bg-primary-700"
                   >
                     ยืนยัน
                   </button>
@@ -362,7 +362,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleBackToRolePick}
-                className="text-sm font-medium text-emerald-700 underline dark:text-emerald-400"
+                className="text-sm font-medium text-primary-700 underline dark:text-primary-400"
               >
                 ← กลับไปเลือกบทบาท
               </button>

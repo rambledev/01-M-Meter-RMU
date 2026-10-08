@@ -19,7 +19,7 @@ export default function PrintQrModal({
         <button
           type="button"
           onClick={() => window.print()}
-          className="self-start rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+          className="self-start rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
         >
           พิมพ์
         </button>

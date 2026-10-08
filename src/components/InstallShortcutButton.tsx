@@ -41,7 +41,7 @@ export default function InstallShortcutButton() {
       <button
         type="button"
         onClick={handleClick}
-        className="w-full rounded-lg border border-emerald-600 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+        className="w-full rounded-lg border border-primary-600 px-4 py-3 text-sm font-semibold text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950/30"
       >
         ➕ เพิ่มทางลัดไปยังหน้าจอ
       </button>

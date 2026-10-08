@@ -9,7 +9,7 @@ import ExecutiveSummaryView from "@/components/ExecutiveSummaryView";
 export default function AdminSummary() {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-emerald-800 dark:text-emerald-400">สรุปข้อมูล</h3>
+      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">สรุปข้อมูล</h3>
       <ExecutiveSummaryView />
     </section>
   );

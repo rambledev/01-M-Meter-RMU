@@ -45,7 +45,7 @@ export default function MeterPreview({
           type="button"
           onClick={onRunOcr}
           disabled={ocrStatus === "loading"}
-          className="rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+          className="rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
         >
           {ocrStatus === "loading" ? "กำลังอ่านตัวเลข..." : "🔎 อ่านตัวเลข"}
         </button>

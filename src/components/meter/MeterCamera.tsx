@@ -236,7 +236,7 @@ export default function MeterCamera({
         <button
           type="button"
           onClick={startCamera}
-          className="rounded-lg bg-emerald-600 px-4 py-4 text-lg font-bold text-white hover:bg-emerald-700"
+          className="rounded-lg bg-primary-600 px-4 py-4 text-lg font-bold text-white hover:bg-primary-700"
         >
           📷 ถ่ายภาพมิเตอร์
         </button>

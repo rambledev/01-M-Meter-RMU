@@ -314,7 +314,7 @@ export default function MeterImageEditor({
         <button
           type="button"
           onClick={() => onConfirm(file, region, liveState)}
-          className="flex-1 rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700"
+          className="flex-1 rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white hover:bg-primary-700"
         >
           ใช้ภาพนี้
         </button>

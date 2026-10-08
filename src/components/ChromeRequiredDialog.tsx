@@ -49,7 +49,7 @@ export default function ChromeRequiredDialog() {
         <button
           type="button"
           onClick={handleOpenChrome}
-          className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-3 text-base font-bold text-white hover:bg-emerald-700"
+          className="mt-2 w-full rounded-lg bg-primary-600 px-4 py-3 text-base font-bold text-white hover:bg-primary-700"
         >
           ใช้ Google Chrome
         </button>

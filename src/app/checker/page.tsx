@@ -181,9 +181,9 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-1 border-b-2 border-emerald-600 pb-3">
+      <header className="flex flex-col gap-1 border-b-2 border-primary-600 pb-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-emerald-800 dark:text-emerald-400">
+          <h1 className="text-lg font-bold text-primary-800 dark:text-primary-400">
             สวัสดี, {session.name}
           </h1>
           <OnlineStatusBadge />
@@ -195,7 +195,7 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
           <button
             type="button"
             onClick={logout}
-            className="shrink-0 text-xs font-medium text-emerald-700 underline dark:text-emerald-400"
+            className="shrink-0 text-xs font-medium text-primary-700 underline dark:text-primary-400"
           >
             ออกจากระบบ
           </button>
@@ -204,7 +204,7 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
 
       {/* Sync */}
       {(pendingCount > 0 || syncMessage) && (
-        <section className="flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-800 dark:bg-emerald-950/20">
+        <section className="flex flex-col gap-2 rounded-xl border border-primary-200 bg-primary-50/50 p-3 dark:border-primary-800 dark:bg-primary-950/20">
           {pendingCount > 0 && (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               มีข้อมูลรอส่ง {pendingCount} รายการ
@@ -215,7 +215,7 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
               type="button"
               onClick={handleSync}
               disabled={isSyncing}
-              className="rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+              className="rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
             >
               {isSyncing ? "กำลัง Sync..." : "Sync ข้อมูล"}
             </button>
@@ -236,7 +236,7 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
           <button
             type="button"
             onClick={() => setShowQrScanner(true)}
-            className="rounded-lg bg-emerald-600 px-4 py-4 text-lg font-bold text-white hover:bg-emerald-700"
+            className="rounded-lg bg-primary-600 px-4 py-4 text-lg font-bold text-white hover:bg-primary-700"
           >
             📷 เก็บมิเตอร์ (แสกน QR)
           </button>
@@ -254,7 +254,7 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
           <button
             type="button"
             onClick={handleManualLookup}
-            className="shrink-0 rounded-lg border border-emerald-600 px-4 py-3 font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+            className="shrink-0 rounded-lg border border-primary-600 px-4 py-3 font-semibold text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950/30"
           >
             ค้นหา
           </button>
@@ -303,7 +303,7 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
                 key={m.id}
                 type="button"
                 onClick={() => goToMeter(m.id)}
-                className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+                className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
               >
                 <span>
                   <span className="block text-sm font-semibold">{m.code}</span>
@@ -312,7 +312,7 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
                     m.readThisMonth
-                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                      ? "bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300"
                       : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
                   }`}
                 >
@@ -326,7 +326,7 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
 
       <Link
         href="/checker/history"
-        className="text-center text-sm font-semibold text-emerald-700 underline dark:text-emerald-400"
+        className="text-center text-sm font-semibold text-primary-700 underline dark:text-primary-400"
       >
         ดูประวัติ / Export Excel / อธิบายค่าไฟ
       </Link>

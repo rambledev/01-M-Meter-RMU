@@ -14,9 +14,9 @@ import ExecutiveSummaryView from "@/components/ExecutiveSummaryView";
 export default function ExecutivePage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-emerald-600 pb-3">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-primary-600 pb-3">
         <div>
-          <h1 className="text-lg font-bold text-emerald-800 dark:text-emerald-400">
+          <h1 className="text-lg font-bold text-primary-800 dark:text-primary-400">
             รายงานสรุปสำหรับผู้บริหาร
           </h1>
           <p className="text-sm text-zinc-500">
@@ -25,7 +25,7 @@ export default function ExecutivePage() {
         </div>
         <Link
           href="/"
-          className="shrink-0 text-xs font-medium text-emerald-700 underline dark:text-emerald-400"
+          className="shrink-0 text-xs font-medium text-primary-700 underline dark:text-primary-400"
         >
           เปลี่ยนบทบาท
         </Link>

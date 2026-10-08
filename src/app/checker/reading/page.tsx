@@ -236,7 +236,7 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
     return (
       <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-10 text-center">
         <p className="text-sm text-zinc-500">ไม่พบมิเตอร์ที่เลือก</p>
-        <Link href="/checker" className="text-sm font-semibold text-emerald-700 underline dark:text-emerald-400">
+        <Link href="/checker" className="text-sm font-semibold text-primary-700 underline dark:text-primary-400">
           กลับหน้าหลัก
         </Link>
       </div>
@@ -249,7 +249,7 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
         <p className="text-sm text-zinc-500">
           {metersLoaded ? "ไม่พบมิเตอร์รหัสนี้" : "กำลังโหลด..."}
         </p>
-        <Link href="/checker" className="text-sm font-semibold text-emerald-700 underline dark:text-emerald-400">
+        <Link href="/checker" className="text-sm font-semibold text-primary-700 underline dark:text-primary-400">
           กลับหน้าหลัก
         </Link>
       </div>
@@ -259,13 +259,13 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
       <header className="flex items-center justify-between">
-        <Link href="/checker" className="text-sm font-semibold text-emerald-700 underline dark:text-emerald-400">
+        <Link href="/checker" className="text-sm font-semibold text-primary-700 underline dark:text-primary-400">
           ← กลับหน้าหลัก
         </Link>
       </header>
 
       {/* Meter info */}
-      <section className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+      <section className="rounded-xl border border-primary-100 bg-primary-50/60 p-4 dark:border-primary-900 dark:bg-primary-950/20">
         <p className="text-xl font-bold">{meter.code}</p>
         <p className="text-zinc-600 dark:text-zinc-400">{meter.roomName}</p>
         <p className="text-zinc-600 dark:text-zinc-400">{meter.zoneName}</p>
@@ -287,7 +287,7 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
       </section>
 
       {savedReading ? (
-        <section className="flex flex-col gap-3 rounded-xl border border-emerald-400 bg-emerald-50 p-4 text-sm text-emerald-900">
+        <section className="flex flex-col gap-3 rounded-xl border border-primary-400 bg-primary-50 p-4 text-sm text-primary-900">
           <p className="text-base font-semibold">บันทึกสำเร็จ — สถานะ {savedReading.status}</p>
           <p>ครั้งก่อน: {savedReading.previousReading ?? "-"}</p>
           <p>ครั้งนี้: {savedReading.confirmedValue ?? "-"}</p>
@@ -304,14 +304,14 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
             <button
               type="button"
               onClick={() => router.push("/checker")}
-              className="flex-1 rounded-lg bg-emerald-700 px-4 py-3 font-semibold text-white"
+              className="flex-1 rounded-lg bg-primary-700 px-4 py-3 font-semibold text-white"
             >
               กลับหน้าหลัก
             </button>
             <button
               type="button"
               onClick={startAnotherMonth}
-              className="flex-1 rounded-lg border border-emerald-700 px-4 py-3 font-semibold text-emerald-800"
+              className="flex-1 rounded-lg border border-primary-700 px-4 py-3 font-semibold text-primary-800"
             >
               จดเดือนอื่นของมิเตอร์นี้
             </button>

@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Dark mode disabled site-wide (2026-10-08, explicit request: background
+   was turning black under the OS/browser's night mode). Tailwind v4's
+   `dark:` variant defaults to following prefers-color-scheme; redefining
+   it to a class selector that's never applied anywhere in this app (no
+   element ever gets class="dark") makes every `dark:*` utility across
+   every component a no-op, without having to touch the ~40 files that
+   use one — same effect as v3's `darkMode: "class"` with the class never
+   added. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -10,13 +20,87 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* "primary" is the one brand color every role-themed page uses for
+     chrome/buttons/active-states — src/app/{admin,checker,resident}/
+     layout.tsx set [data-role] on their subtree to pick a palette below;
+     home (/) and /executive get none, so they fall through to the
+     :root default. Same indirection mechanism as --color-background/
+     --color-foreground above, just keyed by [data-role] instead of a
+     dark-mode media query. */
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
+  --color-primary-300: var(--primary-300);
+  --color-primary-400: var(--primary-400);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+  --color-primary-800: var(--primary-800);
+  --color-primary-900: var(--primary-900);
+  --color-primary-950: var(--primary-950);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Pastel/formal palettes, one per role (2026-10-08 site-wide re-theme).
+   600 is the primary action/button/active-nav shade in every scale —
+   same position emerald-600 held before this. (Dark mode is disabled
+   site-wide now, per the @custom-variant above, so there's no separate
+   dark-only scale to maintain either.) */
+:root {
+  /* neutral/default — home page, /executive: belongs to no single role */
+  --primary-50: #f4f5f7;
+  --primary-100: #e8eaee;
+  --primary-200: #d1d6dd;
+  --primary-300: #aeb7c4;
+  --primary-400: #828ea0;
+  --primary-500: #647086;
+  --primary-600: #4f5a6e;
+  --primary-700: #424b5a;
+  --primary-800: #383f4a;
+  --primary-900: #30353e;
+  --primary-950: #1b1e24;
+}
+
+[data-role="admin"] {
+  --primary-50: #fbf2f2;
+  --primary-100: #f6e1e1;
+  --primary-200: #eec4c5;
+  --primary-300: #e0989b;
+  --primary-400: #cc6d72;
+  --primary-500: #b84a51;
+  --primary-600: #9e3940;
+  --primary-700: #832d33;
+  --primary-800: #6b262b;
+  --primary-900: #592226;
+  --primary-950: #2f1012;
+}
+
+[data-role="checker"] {
+  --primary-50: #f1f5fa;
+  --primary-100: #e1eaf4;
+  --primary-200: #c2d5e9;
+  --primary-300: #99b8d8;
+  --primary-400: #6b94c0;
+  --primary-500: #4a76a6;
+  --primary-600: #39608c;
+  --primary-700: #2f4e73;
+  --primary-800: #284260;
+  --primary-900: #233850;
+  --primary-950: #16222f;
+}
+
+[data-role="resident"] {
+  --primary-50: #f2f7f3;
+  --primary-100: #e3eee5;
+  --primary-200: #c5ddc9;
+  --primary-300: #9ec5a6;
+  --primary-400: #72a77e;
+  --primary-500: #538a5f;
+  --primary-600: #41704c;
+  --primary-700: #365c3f;
+  --primary-800: #2d4b34;
+  --primary-900: #263e2c;
+  --primary-950: #14211a;
 }
 
 body {

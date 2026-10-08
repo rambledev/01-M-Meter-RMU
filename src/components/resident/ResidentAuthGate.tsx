@@ -63,9 +63,9 @@ export default function ResidentAuthGate({
 
   if (session === null) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-linear-to-b from-emerald-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-linear-to-b from-primary-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
         <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-emerald-600 shadow-sm">
+          <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-primary-600 shadow-sm">
             <Image
               src="/meter.png"
               alt="โลโก้ระบบ"

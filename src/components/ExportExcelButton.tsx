@@ -79,7 +79,7 @@ export default function ExportExcelButton({
         type="button"
         onClick={handleExport}
         disabled={isExporting}
-        className="rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+        className="rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
       >
         {isExporting ? "กำลัง Export..." : "Export Excel"}
       </button>

@@ -96,9 +96,9 @@ export default function AdminPage() {
             : "-translate-x-full md:w-0 md:min-w-0 md:translate-x-0 md:overflow-hidden md:border-r-0"
         }`}
       >
-        <div className="flex items-center justify-between gap-2 border-b-2 border-emerald-600 px-4 py-4">
+        <div className="flex items-center justify-between gap-2 border-b-2 border-primary-600 px-4 py-4">
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold text-emerald-800 dark:text-emerald-400">
+            <h1 className="truncate text-lg font-bold text-primary-800 dark:text-primary-400">
               ผู้ดูแลระบบ
             </h1>
             {adminName && <p className="truncate text-sm text-zinc-500">สวัสดี, {adminName}</p>}
@@ -121,8 +121,8 @@ export default function AdminPage() {
               onClick={() => handleSelectTab(t.id)}
               className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold whitespace-nowrap transition-colors ${
                 tab === t.id
-                  ? "bg-emerald-600 text-white"
-                  : "text-zinc-600 hover:bg-emerald-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  ? "bg-primary-600 text-white"
+                  : "text-zinc-600 hover:bg-primary-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
               }`}
             >
               <span aria-hidden="true">{t.icon}</span>
@@ -135,7 +135,7 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={handleLogout}
-            className="w-full rounded-lg px-3 py-2 text-left text-xs font-medium whitespace-nowrap text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-zinc-800"
+            className="w-full rounded-lg px-3 py-2 text-left text-xs font-medium whitespace-nowrap text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-zinc-800"
           >
             ออกจากระบบ
           </button>

@@ -62,13 +62,13 @@ function HistoryPage({ session }: { session: CheckerSession }) {
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
-      <header className="flex items-center justify-between border-b-2 border-emerald-600 pb-3">
-        <h1 className="text-lg font-bold text-emerald-800 dark:text-emerald-400">
+      <header className="flex items-center justify-between border-b-2 border-primary-600 pb-3">
+        <h1 className="text-lg font-bold text-primary-800 dark:text-primary-400">
           ประวัติ / รายงาน
         </h1>
         <Link
           href="/checker"
-          className="text-sm font-semibold text-emerald-700 underline dark:text-emerald-400"
+          className="text-sm font-semibold text-primary-700 underline dark:text-primary-400"
         >
           ← กลับหน้าหลัก
         </Link>

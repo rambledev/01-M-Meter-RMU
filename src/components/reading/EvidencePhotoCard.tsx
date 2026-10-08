@@ -41,7 +41,7 @@ export default function EvidencePhotoCard({
       <p
         className={`text-sm font-medium ${
           imageBlob
-            ? "text-emerald-700 dark:text-emerald-400"
+            ? "text-primary-700 dark:text-primary-400"
             : "text-amber-700 dark:text-amber-400"
         }`}
       >

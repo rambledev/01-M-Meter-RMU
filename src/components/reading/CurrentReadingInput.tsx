@@ -169,7 +169,7 @@ export default function CurrentReadingInput({
               className={`h-14 w-10 rounded-lg border text-center text-2xl font-bold tracking-wide dark:bg-zinc-900 ${
                 error
                   ? "border-red-400 focus:border-red-500"
-                  : "border-zinc-300 focus:border-emerald-500 dark:border-zinc-700"
+                  : "border-zinc-300 focus:border-primary-500 dark:border-zinc-700"
               }`}
               placeholder="0"
             />

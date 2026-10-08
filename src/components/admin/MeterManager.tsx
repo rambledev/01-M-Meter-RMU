@@ -130,7 +130,7 @@ export default function MeterManager({
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-emerald-800 dark:text-emerald-400">มิเตอร์ (Meter)</h3>
+      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">มิเตอร์ (Meter)</h3>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <select
@@ -198,7 +198,7 @@ export default function MeterManager({
               </thead>
               <tbody>
                 {group.meters.map((meter) => (
-                  <tr key={meter.id} className="border-t border-zinc-200 transition-colors hover:bg-emerald-50/60 dark:border-zinc-800 dark:hover:bg-emerald-950/10">
+                  <tr key={meter.id} className="border-t border-zinc-200 transition-colors hover:bg-primary-50/60 dark:border-zinc-800 dark:hover:bg-primary-950/10">
                     <td className="p-2">
                       <input
                         type="checkbox"
@@ -269,7 +269,7 @@ export default function MeterManager({
               type="button"
               onClick={handleSubmit}
               disabled={busy}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
             >
               บันทึกการแก้ไข
             </button>

@@ -74,7 +74,7 @@ export default function ZoneManager({
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-emerald-800 dark:text-emerald-400">โซน (Zone)</h3>
+      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">โซน (Zone)</h3>
 
       <div className="overflow-x-auto rounded-xl border border-zinc-300 dark:border-zinc-700">
         <table className="w-full min-w-[420px] text-sm">
@@ -94,7 +94,7 @@ export default function ZoneManager({
               </tr>
             )}
             {zones.map((zone) => (
-              <tr key={zone.id} className="border-t border-zinc-200 transition-colors hover:bg-emerald-50/60 dark:border-zinc-800 dark:hover:bg-emerald-950/10">
+              <tr key={zone.id} className="border-t border-zinc-200 transition-colors hover:bg-primary-50/60 dark:border-zinc-800 dark:hover:bg-primary-950/10">
                 <td className="p-2">{zone.name}</td>
                 <td className="p-2">{zone.roomCount}</td>
                 <td className="p-2 text-right">
@@ -133,7 +133,7 @@ export default function ZoneManager({
             type="button"
             onClick={handleSubmit}
             disabled={busy}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
           >
             {editingId ? "บันทึกการแก้ไข" : "เพิ่มโซน"}
           </button>

@@ -32,7 +32,7 @@ export default function UsageSummaryCard({
       className={`flex items-center justify-between rounded-lg px-3 py-2 ${
         isWarning
           ? "bg-amber-50 dark:bg-amber-950/20"
-          : "bg-emerald-50 dark:bg-emerald-950/20"
+          : "bg-primary-50 dark:bg-primary-950/20"
       }`}
     >
       <span className="text-sm font-semibold">การใช้ไฟ</span>

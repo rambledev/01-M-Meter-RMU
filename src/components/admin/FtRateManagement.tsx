@@ -182,7 +182,7 @@ export default function FtRateManagement() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-emerald-800 dark:text-emerald-400">ค่า Ft รายเดือน</h3>
+      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">ค่า Ft รายเดือน</h3>
       <p className="text-xs text-zinc-500">
         Ft ผูกกับเดือนโดยตรง (1 เดือน = 1 ค่า) — ไม่ใช่ช่วงวันที่มีผล การคำนวณค่าไฟของแต่ละเดือนจะใช้ Ft ของเดือนนั้นเสมอ
         เดือนที่ยังไม่ได้กำหนดค่าจะไม่คำนวณยอดค่าไฟ
@@ -210,7 +210,7 @@ export default function FtRateManagement() {
           {ft && (
             <p className="text-sm">
               สถานะ:{" "}
-              <span className={ft.status === "ACTIVE" ? "font-semibold text-emerald-700" : "font-semibold text-zinc-500"}>
+              <span className={ft.status === "ACTIVE" ? "font-semibold text-primary-700" : "font-semibold text-zinc-500"}>
                 {ft.status === "ACTIVE" ? "ใช้งานอยู่" : "ปิดใช้งาน"}
               </span>{" "}
               · สร้างโดย {ft.createdByName}
@@ -252,7 +252,7 @@ export default function FtRateManagement() {
 
           {formError && <p className="text-sm font-medium text-red-600">{formError}</p>}
           {savedMessage && (
-            <p className="rounded-lg bg-emerald-100 px-3 py-2 text-sm font-medium text-emerald-800">
+            <p className="rounded-lg bg-primary-100 px-3 py-2 text-sm font-medium text-primary-800">
               {savedMessage}
             </p>
           )}
@@ -262,7 +262,7 @@ export default function FtRateManagement() {
               type="button"
               onClick={handleSave}
               disabled={busy}
-              className="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+              className="rounded-lg bg-primary-600 px-4 py-2 font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
             >
               {ft ? "บันทึกการแก้ไข" : "สร้าง Ft เดือนนี้"}
             </button>
@@ -299,7 +299,7 @@ export default function FtRateManagement() {
                           href={doc.storagePath}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-medium text-emerald-700 underline dark:text-emerald-400"
+                          className="font-medium text-primary-700 underline dark:text-primary-400"
                         >
                           📎 {doc.originalName}
                         </a>

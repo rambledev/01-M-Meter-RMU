@@ -17,7 +17,7 @@ export default function MeterLiveReadingBadge({
 
   if (state.status === "stable") {
     return (
-      <div className="pointer-events-none rounded-lg bg-emerald-600/90 px-3 py-1.5 text-sm font-bold text-white shadow">
+      <div className="pointer-events-none rounded-lg bg-primary-600/90 px-3 py-1.5 text-sm font-bold text-white shadow">
         อ่านได้: {state.value} ✓ ({confidencePercent}%)
       </div>
     );

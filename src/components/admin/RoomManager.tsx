@@ -106,7 +106,7 @@ export default function RoomManager({
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-emerald-800 dark:text-emerald-400">ห้องพัก (Room)</h3>
+      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">ห้องพัก (Room)</h3>
 
       <div className="overflow-x-auto rounded-xl border border-zinc-300 dark:border-zinc-700">
         <table className="w-full min-w-[560px] text-sm">
@@ -129,7 +129,7 @@ export default function RoomManager({
             )}
             {rooms.map((room) => (
               <Fragment key={room.id}>
-                <tr className="border-t border-zinc-200 transition-colors hover:bg-emerald-50/60 dark:border-zinc-800 dark:hover:bg-emerald-950/10">
+                <tr className="border-t border-zinc-200 transition-colors hover:bg-primary-50/60 dark:border-zinc-800 dark:hover:bg-primary-950/10">
                   <td className="p-2">{room.name}</td>
                   <td className="p-2">{room.residentName ?? "-"}</td>
                   <td className="p-2">{room.zoneName}</td>
@@ -175,7 +175,7 @@ export default function RoomManager({
                           type="button"
                           onClick={() => handleAddMeterSubmit(room)}
                           disabled={addMeterBusy}
-                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+                          className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
                         >
                           บันทึก
                         </button>
@@ -233,7 +233,7 @@ export default function RoomManager({
             type="button"
             onClick={handleSubmit}
             disabled={busy}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
           >
             {editingId ? "บันทึกการแก้ไข" : "เพิ่มห้องพัก"}
           </button>

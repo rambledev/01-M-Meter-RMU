@@ -53,7 +53,7 @@ export default function FtAnnouncements() {
                     href={doc.storagePath}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm font-medium text-emerald-700 underline dark:text-emerald-400"
+                    className="text-sm font-medium text-primary-700 underline dark:text-primary-400"
                   >
                     📎 {doc.originalName}
                   </a>

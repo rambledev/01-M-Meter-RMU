@@ -58,7 +58,7 @@ export default function MeterQrModal({
             type="button"
             onClick={handleDownload}
             disabled={!dataUrl}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-emerald-700"
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
           >
             ดาวน์โหลด
           </button>

@@ -83,7 +83,7 @@ export default function ReadingVerificationSummary({
         type="button"
         disabled={!canSave}
         onClick={onConfirm}
-        className="rounded-lg bg-emerald-600 px-4 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
+        className="rounded-lg bg-primary-600 px-4 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
       >
         {isSaving ? "กำลังบันทึก..." : "ยืนยันและบันทึก"}
       </button>
