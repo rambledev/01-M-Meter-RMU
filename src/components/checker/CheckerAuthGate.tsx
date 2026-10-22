@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
+import TechGridOverlay from "@/components/TechGridOverlay";
 import { loginChecker } from "@/lib/checker/checkerAuthApi";
 import {
   clearCheckerSession,
@@ -103,7 +104,8 @@ export default function CheckerAuthGate({
 
   if (session === null) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-linear-to-b from-primary-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
+      <div className="relative isolate flex min-h-screen flex-col items-center justify-center bg-linear-to-b from-primary-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
+        <TechGridOverlay className="-z-10 text-primary-900" />
         <div className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex flex-col items-center gap-2">
             <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-primary-600 shadow-sm">
