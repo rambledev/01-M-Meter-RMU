@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MapPin } from "lucide-react";
 import { createZone, deleteZone, updateZone } from "@/lib/admin/adminApi";
 import type { MeterDTO, RoomDTO, ZoneDTO } from "@/lib/admin/types";
 
@@ -74,7 +75,10 @@ export default function ZoneManager({
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">โซน (Zone)</h3>
+      <h3 className="flex items-center gap-2 text-base font-semibold text-primary-800 dark:text-primary-400">
+        <MapPin aria-hidden="true" className="h-5 w-5 shrink-0" />
+        โซน (Zone)
+      </h3>
 
       <div className="overflow-x-auto rounded-xl border border-zinc-300 dark:border-zinc-700">
         <table className="w-full min-w-[420px] text-sm">

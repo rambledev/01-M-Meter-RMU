@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  CalendarCheck,
+  ClipboardList,
+  Gauge,
+  Home,
+  MapPin,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import MonthYearSelect from "@/components/MonthYearSelect";
 import MockDataToggle from "@/components/admin/MockDataToggle";
 import { fetchDashboard, listMissingReadings, listZones } from "@/lib/admin/adminApi";
@@ -10,14 +20,14 @@ import { useMockMode } from "@/lib/mock/mockMode";
 import { currentMonthValue } from "@/lib/reading/readingMonth";
 import { formatReadingPeriod } from "@/lib/admin/period";
 
-const CARDS: { key: keyof AdminDashboardSummary; label: string }[] = [
-  { key: "zoneCount", label: "โซน" },
-  { key: "roomCount", label: "ห้องพัก" },
-  { key: "meterCount", label: "มิเตอร์" },
-  { key: "userCount", label: "ผู้ใช้งาน" },
-  { key: "readingCount", label: "รายการอ่านมิเตอร์ทั้งหมด" },
-  { key: "readingCountThisMonth", label: "รายการอ่านมิเตอร์เดือนนี้" },
-  { key: "syncErrorCount", label: "Sync ผิดพลาด" },
+const CARDS: { key: keyof AdminDashboardSummary; label: string; icon: LucideIcon }[] = [
+  { key: "zoneCount", label: "โซน", icon: MapPin },
+  { key: "roomCount", label: "ห้องพัก", icon: Home },
+  { key: "meterCount", label: "มิเตอร์", icon: Gauge },
+  { key: "userCount", label: "ผู้ใช้งาน", icon: Users },
+  { key: "readingCount", label: "รายการอ่านมิเตอร์ทั้งหมด", icon: ClipboardList },
+  { key: "readingCountThisMonth", label: "รายการอ่านมิเตอร์เดือนนี้", icon: CalendarCheck },
+  { key: "syncErrorCount", label: "Sync ผิดพลาด", icon: AlertTriangle },
 ];
 
 export default function AdminDashboard() {
@@ -64,21 +74,33 @@ export default function AdminDashboard() {
       <MockDataToggle />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {CARDS.map((card) => (
-          <div
-            key={card.key}
-            className={`flex flex-col gap-1 rounded-xl border-t-4 border bg-white p-4 shadow-sm dark:bg-zinc-900 ${
-              card.key === "syncErrorCount" && summary[card.key] > 0
-                ? "border-t-red-500 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
-                : "border-t-primary-500 border-zinc-200 dark:border-zinc-800"
-            }`}
-          >
-            <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-              {summary[card.key]}
-            </span>
-            <span className="text-xs text-zinc-500">{card.label}</span>
-          </div>
-        ))}
+        {CARDS.map((card) => {
+          const isAlert = card.key === "syncErrorCount" && summary[card.key] > 0;
+          return (
+            <div
+              key={card.key}
+              className={`flex flex-col gap-2 rounded-xl border-t-4 border bg-white p-4 shadow-sm dark:bg-zinc-900 ${
+                isAlert
+                  ? "border-t-red-500 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
+                  : "border-t-primary-500 border-zinc-200 dark:border-zinc-800"
+              }`}
+            >
+              <span
+                className={`flex h-9 w-9 items-center justify-center rounded-full ${
+                  isAlert
+                    ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400"
+                    : "bg-primary-50 text-primary-600 dark:bg-primary-950/40 dark:text-primary-400"
+                }`}
+              >
+                <card.icon aria-hidden="true" className="h-5 w-5" />
+              </span>
+              <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                {summary[card.key]}
+              </span>
+              <span className="text-xs text-zinc-500">{card.label}</span>
+            </div>
+          );
+        })}
       </div>
 
       {mockMode ? (

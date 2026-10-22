@@ -2,6 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import {
+  Banknote,
+  Gauge,
+  History,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  PieChart,
+  Users,
+  X,
+  Zap,
+} from "lucide-react";
 import { clearAdminSession, getAdminSession } from "@/lib/admin/adminSession";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 import AdminSummary from "@/components/admin/AdminSummary";
@@ -12,13 +24,13 @@ import ReadingHistoryManagement from "@/components/admin/ReadingHistoryManagemen
 import UserManagement from "@/components/admin/UserManagement";
 
 const TABS = [
-  { id: "dashboard", label: "Dashboard", icon: "🏠" },
-  { id: "summary", label: "สรุปข้อมูล", icon: "📊" },
-  { id: "meters", label: "จัดการมิเตอร์", icon: "🔌" },
-  { id: "history", label: "ประวัติการจดมิเตอร์", icon: "🕒" },
-  { id: "users", label: "ข้อมูลผู้ใช้งาน", icon: "👤" },
-  { id: "billing", label: "ตั้งค่าค่าไฟ", icon: "💰" },
-  { id: "ft", label: "ค่า Ft", icon: "⚡" },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "summary", label: "สรุปข้อมูล", icon: PieChart },
+  { id: "meters", label: "จัดการมิเตอร์", icon: Gauge },
+  { id: "history", label: "ประวัติการจดมิเตอร์", icon: History },
+  { id: "users", label: "ข้อมูลผู้ใช้งาน", icon: Users },
+  { id: "billing", label: "ตั้งค่าค่าไฟ", icon: Banknote },
+  { id: "ft", label: "ค่า Ft", icon: Zap },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -76,7 +88,9 @@ export default function AdminPage() {
     }
   }
 
-  const activeLabel = TABS.find((t) => t.id === tab)?.label ?? "";
+  const activeTab = TABS.find((t) => t.id === tab);
+  const activeLabel = activeTab?.label ?? "";
+  const ActiveIcon = activeTab?.icon;
 
   return (
     <div className="flex min-h-dvh w-full">
@@ -109,7 +123,7 @@ export default function AdminPage() {
             onClick={() => setSidebarOverride(false)}
             className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-800"
           >
-            ✕
+            <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
 
@@ -125,7 +139,7 @@ export default function AdminPage() {
                   : "text-zinc-600 hover:bg-primary-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
               }`}
             >
-              <span aria-hidden="true">{t.icon}</span>
+              <t.icon aria-hidden="true" className="h-4 w-4 shrink-0" />
               {t.label}
             </button>
           ))}
@@ -135,8 +149,9 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={handleLogout}
-            className="w-full rounded-lg px-3 py-2 text-left text-xs font-medium whitespace-nowrap text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-zinc-800"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium whitespace-nowrap text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-zinc-800"
           >
+            <LogOut aria-hidden="true" className="h-4 w-4 shrink-0" />
             ออกจากระบบ
           </button>
         </div>
@@ -150,9 +165,10 @@ export default function AdminPage() {
             onClick={() => setSidebarOverride(!sidebarOpen)}
             className="shrink-0 rounded-lg border border-zinc-300 p-2 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
-            ☰
+            <Menu aria-hidden="true" className="h-5 w-5" />
           </button>
-          <h2 className="truncate text-base font-semibold text-zinc-800 dark:text-zinc-100">
+          <h2 className="flex items-center gap-2 truncate text-base font-semibold text-zinc-800 dark:text-zinc-100">
+            {ActiveIcon && <ActiveIcon aria-hidden="true" className="h-5 w-5 shrink-0 text-primary-600" />}
             {activeLabel}
           </h2>
         </header>

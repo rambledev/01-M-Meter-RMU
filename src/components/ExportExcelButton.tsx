@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FileSpreadsheet } from "lucide-react";
 import MonthYearSelect from "@/components/MonthYearSelect";
 import type { BillingConfig } from "@/lib/billing/types";
 import { buildExportFilename } from "@/lib/export/filename";
@@ -61,7 +62,10 @@ export default function ExportExcelButton({
 
   return (
     <section className="flex flex-col gap-2 rounded-xl border border-zinc-300 p-3 dark:border-zinc-700">
-      <p className="text-sm font-semibold">Export Excel</p>
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
+        <FileSpreadsheet aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
+        Export Excel
+      </p>
       <label className="flex flex-col gap-1 text-sm" htmlFor="export-month">
         เดือน
         <MonthYearSelect
@@ -79,8 +83,9 @@ export default function ExportExcelButton({
         type="button"
         onClick={handleExport}
         disabled={isExporting}
-        className="rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
+        className="flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
       >
+        <FileSpreadsheet aria-hidden="true" className="h-4 w-4 shrink-0" />
         {isExporting ? "กำลัง Export..." : "Export Excel"}
       </button>
       {message && (

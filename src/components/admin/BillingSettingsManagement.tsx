@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
+import { Banknote } from "lucide-react";
 import {
   deleteBillingConfigDocument,
   updateBillingConfig,
@@ -290,7 +291,10 @@ export default function BillingSettingsManagement() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">ตั้งค่าการคิดค่าไฟ</h3>
+      <h3 className="flex items-center gap-2 text-base font-semibold text-primary-800 dark:text-primary-400">
+        <Banknote aria-hidden="true" className="h-5 w-5 shrink-0" />
+        ตั้งค่าการคิดค่าไฟ
+      </h3>
       <p className="text-xs text-zinc-500">
         อัตราเหล่านี้เป็นสูตรเบื้องต้นจากเอกสารตัวอย่าง ยังไม่ใช่สูตรทางการที่ได้รับการรับรอง —
         มีผลกับผู้จดมิเตอร์ทุกเครื่องทันทีที่บันทึก

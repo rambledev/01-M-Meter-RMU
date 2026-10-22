@@ -16,6 +16,19 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import {
+  Banknote,
+  CalendarCheck,
+  CalendarX,
+  ClipboardList,
+  Gauge,
+  Home,
+  MapPin,
+  PieChart as PieChartIcon,
+  TrendingUp,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { fetchExecutiveSummary } from "@/lib/executive/executiveApi";
 import type { ExecutiveSummary } from "@/lib/executive/types";
 import { getMockExecutiveSummary } from "@/lib/mock/mockData";
@@ -176,23 +189,28 @@ export default function ExecutiveSummaryView() {
         <>
           {/* KPI cards */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <KpiCard label="โซน" value={summary.zoneCount} />
-            <KpiCard label="ห้องพัก" value={summary.roomCount} />
-            <KpiCard label="มิเตอร์" value={summary.meterCount} />
-            <KpiCard label="รายการจดมิเตอร์ทั้งหมด" value={summary.totalReadingCount} />
-            <KpiCard label="จดแล้วเดือนนี้" value={summary.readingCountThisMonth} />
+            <KpiCard label="โซน" value={summary.zoneCount} icon={MapPin} />
+            <KpiCard label="ห้องพัก" value={summary.roomCount} icon={Home} />
+            <KpiCard label="มิเตอร์" value={summary.meterCount} icon={Gauge} />
+            <KpiCard
+              label="รายการจดมิเตอร์ทั้งหมด"
+              value={summary.totalReadingCount}
+              icon={ClipboardList}
+            />
+            <KpiCard label="จดแล้วเดือนนี้" value={summary.readingCountThisMonth} icon={CalendarCheck} />
             <KpiCard
               label="ยังไม่จดเดือนนี้"
               value={summary.missingThisMonthCount}
+              icon={CalendarX}
               tone={summary.missingThisMonthCount > 0 ? "warning" : "default"}
             />
-            <KpiCard label="หน่วยไฟที่ใช้รวม" value={`${thb(summary.totalUsage)} หน่วย`} />
-            <KpiCard label="ค่าไฟรวมทั้งหมด" value={`${thb(summary.totalBilling)} บาท`} />
+            <KpiCard label="หน่วยไฟที่ใช้รวม" value={`${thb(summary.totalUsage)} หน่วย`} icon={Zap} />
+            <KpiCard label="ค่าไฟรวมทั้งหมด" value={`${thb(summary.totalBilling)} บาท`} icon={Banknote} />
           </div>
 
           {/* Chart grid */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ChartCard title="แนวโน้มการใช้ไฟฟ้า (หน่วย/เดือน)">
+            <ChartCard title="แนวโน้มการใช้ไฟฟ้า (หน่วย/เดือน)" icon={TrendingUp}>
               {windowedTrend.length === 0 ? (
                 <EmptyChartNote />
               ) : (
@@ -215,7 +233,7 @@ export default function ExecutiveSummaryView() {
               )}
             </ChartCard>
 
-            <ChartCard title="แนวโน้มค่าไฟ (บาท/เดือน)">
+            <ChartCard title="แนวโน้มค่าไฟ (บาท/เดือน)" icon={Banknote}>
               {windowedTrend.length === 0 ? (
                 <EmptyChartNote />
               ) : (
@@ -238,7 +256,7 @@ export default function ExecutiveSummaryView() {
               )}
             </ChartCard>
 
-            <ChartCard title="จำนวนรายการจดมิเตอร์ต่อเดือน">
+            <ChartCard title="จำนวนรายการจดมิเตอร์ต่อเดือน" icon={ClipboardList}>
               {windowedTrend.length === 0 ? (
                 <EmptyChartNote />
               ) : (
@@ -254,7 +272,7 @@ export default function ExecutiveSummaryView() {
               )}
             </ChartCard>
 
-            <ChartCard title="เปรียบเทียบการใช้ไฟตามโซน (สะสมทั้งหมด)">
+            <ChartCard title="เปรียบเทียบการใช้ไฟตามโซน (สะสมทั้งหมด)" icon={MapPin}>
               {summary.zoneBreakdown.length === 0 ? (
                 <EmptyChartNote />
               ) : (
@@ -270,7 +288,7 @@ export default function ExecutiveSummaryView() {
               )}
             </ChartCard>
 
-            <ChartCard title="สถานะข้อมูลการจดมิเตอร์">
+            <ChartCard title="สถานะข้อมูลการจดมิเตอร์" icon={PieChartIcon}>
               {summary.statusBreakdown.length === 0 ? (
                 <EmptyChartNote />
               ) : (
@@ -308,30 +326,52 @@ export default function ExecutiveSummaryView() {
 function KpiCard({
   label,
   value,
+  icon: Icon,
   tone = "default",
 }: {
   label: string;
   value: string | number;
+  icon: LucideIcon;
   tone?: "default" | "warning";
 }) {
   return (
     <div
-      className={`flex flex-col gap-1 rounded-xl border-t-4 border bg-white p-4 shadow-sm dark:bg-zinc-900 ${
+      className={`flex flex-col gap-2 rounded-xl border-t-4 border bg-white p-4 shadow-sm dark:bg-zinc-900 ${
         tone === "warning"
           ? "border-t-amber-500 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
           : "border-t-primary-500 border-zinc-200 dark:border-zinc-800"
       }`}
     >
+      <span
+        className={`flex h-9 w-9 items-center justify-center rounded-full ${
+          tone === "warning"
+            ? "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400"
+            : "bg-primary-50 text-primary-600 dark:bg-primary-950/40 dark:text-primary-400"
+        }`}
+      >
+        <Icon aria-hidden="true" className="h-5 w-5" />
+      </span>
       <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{value}</span>
       <span className="text-xs text-zinc-500">{label}</span>
     </div>
   );
 }
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartCard({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-sm font-semibold text-primary-800 dark:text-primary-400">{title}</p>
+      <p className="flex items-center gap-1.5 text-sm font-semibold text-primary-800 dark:text-primary-400">
+        <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+        {title}
+      </p>
       {children}
     </div>
   );

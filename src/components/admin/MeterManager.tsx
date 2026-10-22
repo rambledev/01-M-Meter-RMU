@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Gauge } from "lucide-react";
 import { deleteMeter, updateMeter } from "@/lib/admin/adminApi";
 import type { MeterDTO, RoomDTO, ZoneDTO } from "@/lib/admin/types";
 import MeterQrModal from "./MeterQrModal";
@@ -130,7 +131,10 @@ export default function MeterManager({
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">มิเตอร์ (Meter)</h3>
+      <h3 className="flex items-center gap-2 text-base font-semibold text-primary-800 dark:text-primary-400">
+        <Gauge aria-hidden="true" className="h-5 w-5 shrink-0" />
+        มิเตอร์ (Meter)
+      </h3>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <select

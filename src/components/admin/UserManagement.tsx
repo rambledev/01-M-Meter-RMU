@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { UserPlus, Users } from "lucide-react";
 import {
   createUser,
   deleteUser,
@@ -214,13 +215,17 @@ export default function UserManagement() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">ข้อมูลผู้ใช้งาน</h3>
+        <h3 className="flex items-center gap-2 text-base font-semibold text-primary-800 dark:text-primary-400">
+          <Users aria-hidden="true" className="h-5 w-5 shrink-0" />
+          ข้อมูลผู้ใช้งาน
+        </h3>
         <button
           type="button"
           onClick={openAddModal}
-          className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-700"
+          className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-700"
         >
-          + กำหนดบทบาทด้วย Email
+          <UserPlus aria-hidden="true" className="h-4 w-4 shrink-0" />
+          กำหนดบทบาทด้วย Email
         </button>
       </div>
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { ArrowLeft, Gauge } from "lucide-react";
 import BillingBreakdownPanel from "@/components/BillingBreakdownPanel";
 import CurrentReadingInput from "@/components/reading/CurrentReadingInput";
 import EvidencePhotoCard from "@/components/reading/EvidencePhotoCard";
@@ -259,16 +260,22 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
       <header className="flex items-center justify-between">
-        <Link href="/checker" className="text-sm font-semibold text-primary-700 underline dark:text-primary-400">
-          ← กลับหน้าหลัก
+        <Link href="/checker" className="flex items-center gap-1 text-sm font-semibold text-primary-700 underline dark:text-primary-400">
+          <ArrowLeft aria-hidden="true" className="h-4 w-4 shrink-0" />
+          กลับหน้าหลัก
         </Link>
       </header>
 
       {/* Meter info */}
-      <section className="rounded-xl border border-primary-100 bg-primary-50/60 p-4 dark:border-primary-900 dark:bg-primary-950/20">
-        <p className="text-xl font-bold">{meter.code}</p>
-        <p className="text-zinc-600 dark:text-zinc-400">{meter.roomName}</p>
-        <p className="text-zinc-600 dark:text-zinc-400">{meter.zoneName}</p>
+      <section className="flex items-center gap-3 rounded-xl border border-primary-100 bg-primary-50/60 p-4 dark:border-primary-900 dark:bg-primary-950/20">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">
+          <Gauge aria-hidden="true" className="h-5 w-5" />
+        </span>
+        <div>
+          <p className="text-xl font-bold">{meter.code}</p>
+          <p className="text-zinc-600 dark:text-zinc-400">{meter.roomName}</p>
+          <p className="text-zinc-600 dark:text-zinc-400">{meter.zoneName}</p>
+        </div>
       </section>
 
       {/* Reading month */}

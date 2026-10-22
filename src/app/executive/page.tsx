@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowLeftRight, LineChart } from "lucide-react";
+import DecorativeBackground from "@/components/DecorativeBackground";
 import ExecutiveSummaryView from "@/components/ExecutiveSummaryView";
 
 // ผู้บริหาร (Executive role) — BI-style reporting dashboard (2026-09-06):
@@ -14,9 +16,11 @@ import ExecutiveSummaryView from "@/components/ExecutiveSummaryView";
 export default function ExecutivePage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
+      <DecorativeBackground />
       <header className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-primary-600 pb-3">
         <div>
-          <h1 className="text-lg font-bold text-primary-800 dark:text-primary-400">
+          <h1 className="flex items-center gap-2 text-lg font-bold text-primary-800 dark:text-primary-400">
+            <LineChart aria-hidden="true" className="h-5 w-5 shrink-0" />
             รายงานสรุปสำหรับผู้บริหาร
           </h1>
           <p className="text-sm text-zinc-500">
@@ -25,8 +29,9 @@ export default function ExecutivePage() {
         </div>
         <Link
           href="/"
-          className="shrink-0 text-xs font-medium text-primary-700 underline dark:text-primary-400"
+          className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary-700 underline dark:text-primary-400"
         >
+          <ArrowLeftRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
           เปลี่ยนบทบาท
         </Link>
       </header>

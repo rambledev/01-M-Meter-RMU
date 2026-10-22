@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, Check, History as HistoryIcon, Home, LogOut } from "lucide-react";
 import BillingExplanation from "@/components/BillingExplanation";
 import FtAnnouncements from "@/components/FtAnnouncements";
 import MonthYearSelect from "@/components/MonthYearSelect";
@@ -159,13 +160,15 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
           <button
             type="button"
             onClick={logout}
-            className="shrink-0 text-xs font-medium text-primary-700 underline dark:text-primary-400"
+            className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary-700 underline dark:text-primary-400"
           >
+            <LogOut aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
             ออกจากระบบ
           </button>
         </div>
         <p className="text-xs text-zinc-400">{session.email}</p>
-        <p className="text-sm text-zinc-500">
+        <p className="flex items-center gap-1 text-sm text-zinc-500">
+          <Home aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
           {displayRoom ? `ห้อง ${displayRoom.name} · โซน ${displayRoom.zoneName}` : "ยังไม่ได้เลือกห้องพัก"}
         </p>
       </header>
@@ -186,7 +189,10 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
           {!effectiveLoading && !effectiveError && history && (
             <>
               <section className="flex flex-col gap-2">
-                <p className="text-sm font-semibold">เลือกเดือนดูค่าไฟ</p>
+                <p className="flex items-center gap-1.5 text-sm font-semibold">
+                  <CalendarDays aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
+                  เลือกเดือนดูค่าไฟ
+                </p>
                 <MonthYearSelect value={monthValue} onChange={setMonthValue} />
               </section>
 
@@ -245,7 +251,10 @@ function ResidentHome({ session, logout }: { session: ResidentSession; logout: (
 
               <section className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold">ประวัติการใช้งาน</p>
+                  <p className="flex items-center gap-1.5 text-sm font-semibold">
+                    <HistoryIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
+                    ประวัติการใช้งาน
+                  </p>
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
@@ -318,7 +327,10 @@ function RoomPicker({
 
   return (
     <section className="flex flex-col gap-2 rounded-xl border border-primary-300 bg-primary-50 p-4 dark:border-primary-800 dark:bg-primary-950/30">
-      <p className="text-sm font-semibold">เลือกห้องพักของตัวเอง</p>
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
+        <Home aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
+        เลือกห้องพักของตัวเอง
+      </p>
       <p className="text-xs text-zinc-500">
         ระบบยังไม่ทราบว่าอีเมลนี้พักห้องใด — กรุณาเลือกห้องของตัวเองเพื่อดูประวัติและค่าไฟ
         เลือกได้ครั้งเดียวเท่านั้น หากต้องการเปลี่ยนภายหลังกรุณาติดต่อผู้ดูแลระบบ
@@ -346,8 +358,9 @@ function RoomPicker({
         type="button"
         onClick={handleConfirm}
         disabled={!selectedRoomId || saving}
-        className="self-start rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
+        className="flex items-center gap-1.5 self-start rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
       >
+        <Check aria-hidden="true" className="h-4 w-4 shrink-0" />
         {saving ? "กำลังบันทึก..." : "ยืนยันห้องนี้"}
       </button>
     </section>

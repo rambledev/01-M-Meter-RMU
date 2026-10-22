@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PlusSquare } from "lucide-react";
 import { useInstallPrompt } from "@/lib/pwa/useInstallPrompt";
 
 function isIOS(userAgent: string): boolean {
@@ -41,9 +42,10 @@ export default function InstallShortcutButton() {
       <button
         type="button"
         onClick={handleClick}
-        className="w-full rounded-lg border border-primary-600 px-4 py-3 text-sm font-semibold text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950/30"
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary-600 px-4 py-3 text-sm font-semibold text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950/30"
       >
-        ➕ เพิ่มทางลัดไปยังหน้าจอ
+        <PlusSquare aria-hidden="true" className="h-4 w-4 shrink-0" />
+        เพิ่มทางลัดไปยังหน้าจอ
       </button>
       {note && (
         <p className="rounded-lg bg-zinc-100 px-3 py-2 text-center text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">

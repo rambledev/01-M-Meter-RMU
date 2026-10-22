@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { Home } from "lucide-react";
 import { createMeter, createRoom, deleteRoom, updateRoom } from "@/lib/admin/adminApi";
 import type { MeterDTO, RoomDTO, ZoneDTO } from "@/lib/admin/types";
 
@@ -106,7 +107,10 @@ export default function RoomManager({
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">ห้องพัก (Room)</h3>
+      <h3 className="flex items-center gap-2 text-base font-semibold text-primary-800 dark:text-primary-400">
+        <Home aria-hidden="true" className="h-5 w-5 shrink-0" />
+        ห้องพัก (Room)
+      </h3>
 
       <div className="overflow-x-auto rounded-xl border border-zinc-300 dark:border-zinc-700">
         <table className="w-full min-w-[560px] text-sm">

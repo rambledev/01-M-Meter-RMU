@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { Zap } from "lucide-react";
 import {
   createFt,
   deleteFtDocument,
@@ -182,7 +183,10 @@ export default function FtRateManagement() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">ค่า Ft รายเดือน</h3>
+      <h3 className="flex items-center gap-2 text-base font-semibold text-primary-800 dark:text-primary-400">
+        <Zap aria-hidden="true" className="h-5 w-5 shrink-0" />
+        ค่า Ft รายเดือน
+      </h3>
       <p className="text-xs text-zinc-500">
         Ft ผูกกับเดือนโดยตรง (1 เดือน = 1 ค่า) — ไม่ใช่ช่วงวันที่มีผล การคำนวณค่าไฟของแต่ละเดือนจะใช้ Ft ของเดือนนั้นเสมอ
         เดือนที่ยังไม่ได้กำหนดค่าจะไม่คำนวณยอดค่าไฟ

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Megaphone, Paperclip } from "lucide-react";
 import { fetchFtAnnouncements } from "@/lib/billing/ftApi";
 import type { FtRateDTO } from "@/lib/admin/types";
 import { formatMonthThai, toMonthValue } from "@/lib/reading/readingMonth";
@@ -34,7 +35,8 @@ export default function FtAnnouncements() {
   return (
     <section className="flex w-full flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left dark:border-amber-900/50 dark:bg-amber-950/20">
       <h2 className="flex items-center gap-2 text-sm font-bold text-amber-800 dark:text-amber-400">
-        📢 ประกาศปรับค่า Ft
+        <Megaphone aria-hidden="true" className="h-4 w-4 shrink-0" />
+        ประกาศปรับค่า Ft
       </h2>
       <ul className="flex flex-col gap-3">
         {items.map((ft) => (
@@ -53,9 +55,10 @@ export default function FtAnnouncements() {
                     href={doc.storagePath}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm font-medium text-primary-700 underline dark:text-primary-400"
+                    className="flex items-center gap-1 text-sm font-medium text-primary-700 underline dark:text-primary-400"
                   >
-                    📎 {doc.originalName}
+                    <Paperclip aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                    {doc.originalName}
                   </a>
                   <span className="text-xs text-zinc-500">
                     อัปโหลดโดย {doc.uploadedByName} · {formatDateTimeThai(doc.uploadedAt)}

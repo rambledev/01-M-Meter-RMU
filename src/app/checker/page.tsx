@@ -3,6 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Camera,
+  Gauge,
+  History as HistoryIcon,
+  LogOut,
+  MapPin,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import CheckerAuthGate from "@/components/checker/CheckerAuthGate";
 import MonthYearSelect from "@/components/MonthYearSelect";
 import OnlineStatusBadge from "@/components/OnlineStatusBadge";
@@ -195,8 +204,9 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
           <button
             type="button"
             onClick={logout}
-            className="shrink-0 text-xs font-medium text-primary-700 underline dark:text-primary-400"
+            className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary-700 underline dark:text-primary-400"
           >
+            <LogOut aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
             ออกจากระบบ
           </button>
         </div>
@@ -215,8 +225,9 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
               type="button"
               onClick={handleSync}
               disabled={isSyncing}
-              className="rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
+              className="flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-3 font-semibold text-white disabled:opacity-50 hover:bg-primary-700"
             >
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
               {isSyncing ? "กำลัง Sync..." : "Sync ข้อมูล"}
             </button>
           )}
@@ -236,9 +247,10 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
           <button
             type="button"
             onClick={() => setShowQrScanner(true)}
-            className="rounded-lg bg-primary-600 px-4 py-4 text-lg font-bold text-white hover:bg-primary-700"
+            className="flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-4 text-lg font-bold text-white hover:bg-primary-700"
           >
-            📷 เก็บมิเตอร์ (แสกน QR)
+            <Camera aria-hidden="true" className="h-5 w-5 shrink-0" />
+            เก็บมิเตอร์ (แสกน QR)
           </button>
         )}
         <div className="flex gap-2">
@@ -254,8 +266,9 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
           <button
             type="button"
             onClick={handleManualLookup}
-            className="shrink-0 rounded-lg border border-primary-600 px-4 py-3 font-semibold text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950/30"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-primary-600 px-4 py-3 font-semibold text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950/30"
           >
+            <Search aria-hidden="true" className="h-4 w-4 shrink-0" />
             ค้นหา
           </button>
         </div>
@@ -265,7 +278,10 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
       {/* Month + summary */}
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold">มิเตอร์ที่รับผิดชอบ</p>
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <Gauge aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
+            มิเตอร์ที่รับผิดชอบ
+          </p>
           <MonthYearSelect
             value={monthValue}
             onChange={setMonthValue}
@@ -294,7 +310,8 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
 
       {grouped.map((group) => (
         <section key={group.zoneName} className="flex flex-col gap-1">
-          <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+          <p className="flex items-center gap-1 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+            <MapPin aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
             โซน: {group.zoneName}
           </p>
           <div className="flex flex-col gap-2">
@@ -305,9 +322,14 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
                 onClick={() => goToMeter(m.id)}
                 className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
               >
-                <span>
-                  <span className="block text-sm font-semibold">{m.code}</span>
-                  <span className="block text-xs text-zinc-500">{m.roomName}</span>
+                <span className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-600 dark:bg-primary-950/40 dark:text-primary-400">
+                    <Gauge aria-hidden="true" className="h-4 w-4" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold">{m.code}</span>
+                    <span className="block text-xs text-zinc-500">{m.roomName}</span>
+                  </span>
                 </span>
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -326,8 +348,9 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
 
       <Link
         href="/checker/history"
-        className="text-center text-sm font-semibold text-primary-700 underline dark:text-primary-400"
+        className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-primary-700 underline dark:text-primary-400"
       >
+        <HistoryIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
         ดูประวัติ / Export Excel / อธิบายค่าไฟ
       </Link>
     </div>

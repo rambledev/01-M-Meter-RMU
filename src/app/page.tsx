@@ -3,7 +3,18 @@
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useState } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  Gauge,
+  Home as HomeIcon,
+  MapPin,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import ChromeRequiredDialog from "@/components/ChromeRequiredDialog";
+import DecorativeBackground from "@/components/DecorativeBackground";
 import FtAnnouncements from "@/components/FtAnnouncements";
 import InstallShortcutButton from "@/components/InstallShortcutButton";
 import GoogleSignInButton from "@/components/resident/GoogleSignInButton";
@@ -25,9 +36,9 @@ type Phase =
   | "pending"
   | "error";
 
-const ROLE_OPTIONS: { value: SelfServiceRole; label: string }[] = [
-  { value: "METER_READER", label: "ผู้จดมิเตอร์" },
-  { value: "RESIDENT", label: "ผู้พักอาศัย (ห้องพัก/บ้านพัก)" },
+const ROLE_OPTIONS: { value: SelfServiceRole; label: string; icon: typeof Gauge }[] = [
+  { value: "METER_READER", label: "ผู้จดมิเตอร์", icon: Gauge },
+  { value: "RESIDENT", label: "ผู้พักอาศัย (ห้องพัก/บ้านพัก)", icon: HomeIcon },
 ];
 
 // Home page (2026-09-16 redesign) — was a role-select landing page with no
@@ -184,6 +195,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-linear-to-b from-primary-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
+      <DecorativeBackground />
       <ChromeRequiredDialog />
       <div className="flex w-full max-w-md flex-col items-center gap-8 text-center">
         <header className="flex flex-col items-center gap-2">
@@ -206,11 +218,13 @@ export default function Home() {
         <FtAnnouncements />
 
         <section className="flex w-full flex-col items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <p className="flex items-center justify-center gap-1.5 text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <ShieldCheck aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
             เข้าสู่ระบบด้วยบัญชี Google ของมหาวิทยาลัย
           </p>
-          <p className="text-center text-xs font-semibold text-amber-700 dark:text-amber-400">
-            ⚠ อนุญาตเฉพาะอีเมลที่ลงท้ายด้วย @rmu.ac.th เท่านั้น
+          <p className="flex items-center justify-center gap-1.5 text-center text-xs font-semibold text-amber-700 dark:text-amber-400">
+            <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+            อนุญาตเฉพาะอีเมลที่ลงท้ายด้วย @rmu.ac.th เท่านั้น
           </p>
 
           {(phase === "idle" || phase === "error") && (
@@ -221,14 +235,18 @@ export default function Home() {
 
           {phase === "pick-role" && (
             <div className="flex w-full flex-col gap-2">
-              <p className="text-center text-sm font-semibold">คุณต้องการเข้าใช้งานในบทบาทใด?</p>
+              <p className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold">
+                <Users aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
+                คุณต้องการเข้าใช้งานในบทบาทใด?
+              </p>
               {ROLE_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
                   onClick={() => handlePickRole(opt.value)}
-                  className="rounded-lg border border-primary-600 px-4 py-3 font-semibold text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950/30"
+                  className="flex items-center gap-2 rounded-lg border border-primary-600 px-4 py-3 font-semibold text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950/30"
                 >
+                  <opt.icon aria-hidden="true" className="h-4 w-4 shrink-0" />
                   {opt.label}
                 </button>
               ))}
@@ -237,7 +255,10 @@ export default function Home() {
 
           {phase === "pick-room" && (
             <div className="flex w-full flex-col gap-3">
-              <p className="text-center text-sm font-semibold">เลือกโซนและบ้านพัก/ห้องพักของคุณ</p>
+              <p className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold">
+                <MapPin aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
+                เลือกโซนและบ้านพัก/ห้องพักของคุณ
+              </p>
 
               {roomsLoading && <p className="text-sm text-zinc-500">กำลังโหลด...</p>}
               {roomsError && <p className="text-sm font-medium text-red-600">{roomsError}</p>}
@@ -306,16 +327,18 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleBackToRolePick}
-                className="text-sm font-medium text-primary-700 underline dark:text-primary-400"
+                className="flex items-center gap-1 text-sm font-medium text-primary-700 underline dark:text-primary-400"
               >
-                ← กลับไปเลือกบทบาท
+                <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                กลับไปเลือกบทบาท
               </button>
             </div>
           )}
 
           {phase === "pick-zones" && (
             <div className="flex w-full flex-col gap-3">
-              <p className="text-center text-sm font-semibold">
+              <p className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold">
+                <MapPin aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
                 เลือกโซนที่รับผิดชอบในการเก็บมิเตอร์ (เลือกได้มากกว่า 1 โซน)
               </p>
 
@@ -362,9 +385,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleBackToRolePick}
-                className="text-sm font-medium text-primary-700 underline dark:text-primary-400"
+                className="flex items-center gap-1 text-sm font-medium text-primary-700 underline dark:text-primary-400"
               >
-                ← กลับไปเลือกบทบาท
+                <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                กลับไปเลือกบทบาท
               </button>
             </div>
           )}
@@ -372,7 +396,8 @@ export default function Home() {
           {phase === "registering" && <p className="text-sm text-zinc-500">กำลังส่งคำขอ...</p>}
 
           {phase === "pending" && (
-            <p className="text-center text-sm font-medium text-amber-700 dark:text-amber-400">
+            <p className="flex items-center justify-center gap-1.5 text-center text-sm font-medium text-amber-700 dark:text-amber-400">
+              <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0" />
               ส่งคำขอเรียบร้อย — กรุณารอผู้ดูแลระบบอนุมัติบทบาทการใช้งานของคุณ
             </p>
           )}

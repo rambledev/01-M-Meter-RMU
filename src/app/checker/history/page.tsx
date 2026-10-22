@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ArrowLeft, FileClock, ListChecks } from "lucide-react";
 import BillingExplanation from "@/components/BillingExplanation";
 import ExportExcelButton from "@/components/ExportExcelButton";
 import ReadingHistoryList from "@/components/ReadingHistoryList";
@@ -63,14 +64,16 @@ function HistoryPage({ session }: { session: CheckerSession }) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
       <header className="flex items-center justify-between border-b-2 border-primary-600 pb-3">
-        <h1 className="text-lg font-bold text-primary-800 dark:text-primary-400">
+        <h1 className="flex items-center gap-2 text-lg font-bold text-primary-800 dark:text-primary-400">
+          <FileClock aria-hidden="true" className="h-5 w-5 shrink-0" />
           ประวัติ / รายงาน
         </h1>
         <Link
           href="/checker"
-          className="text-sm font-semibold text-primary-700 underline dark:text-primary-400"
+          className="flex items-center gap-1 text-sm font-semibold text-primary-700 underline dark:text-primary-400"
         >
-          ← กลับหน้าหลัก
+          <ArrowLeft aria-hidden="true" className="h-4 w-4 shrink-0" />
+          กลับหน้าหลัก
         </Link>
       </header>
 
@@ -84,7 +87,10 @@ function HistoryPage({ session }: { session: CheckerSession }) {
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold">ประวัติที่บันทึกในเครื่อง</h2>
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+          <ListChecks aria-hidden="true" className="h-4 w-4 shrink-0 text-primary-600" />
+          ประวัติที่บันทึกในเครื่อง
+        </h2>
         <ReadingHistoryList
           readings={history}
           billingConfig={billingConfig}

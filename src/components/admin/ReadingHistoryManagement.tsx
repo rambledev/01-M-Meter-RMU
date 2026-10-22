@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { History } from "lucide-react";
 import { listReadingHistory, listZones } from "@/lib/admin/adminApi";
 import type { ReadingHistoryDTO, ZoneDTO } from "@/lib/admin/types";
 import { getMockReadingHistory, getMockZones } from "@/lib/mock/mockData";
@@ -138,7 +139,10 @@ export default function ReadingHistoryManagement() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold text-primary-800 dark:text-primary-400">ประวัติการจดมิเตอร์</h3>
+      <h3 className="flex items-center gap-2 text-base font-semibold text-primary-800 dark:text-primary-400">
+        <History aria-hidden="true" className="h-5 w-5 shrink-0" />
+        ประวัติการจดมิเตอร์
+      </h3>
       <p className="text-xs text-zinc-500">รูปแบบรอบ: เดือน (2 หลัก)/ปี พ.ศ. เช่น 01/2569 = มกราคม 2569</p>
 
       <div className="flex flex-col gap-2 sm:flex-row">
