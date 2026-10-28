@@ -1,5 +1,3 @@
-import DecorativeBackground from "@/components/DecorativeBackground";
-
 // Sets the resident green palette (src/app/globals.css's
 // [data-role="resident"] scale) for everything under /resident —
 // including ResidentAuthGate's own login screen, since the gate renders
@@ -8,7 +6,6 @@ import DecorativeBackground from "@/components/DecorativeBackground";
 export default function ResidentLayout({ children }: { children: React.ReactNode }) {
   return (
     <div data-role="resident" className="contents">
-      <DecorativeBackground />
       {children}
     </div>
   );

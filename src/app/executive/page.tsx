@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { ArrowLeftRight, LineChart } from "lucide-react";
-import DecorativeBackground from "@/components/DecorativeBackground";
 import ExecutiveSummaryView from "@/components/ExecutiveSummaryView";
 
 // ผู้บริหาร (Executive role) — BI-style reporting dashboard (2026-09-06):
@@ -15,8 +14,7 @@ import ExecutiveSummaryView from "@/components/ExecutiveSummaryView";
 // — this page only owns its own header/back-link chrome.
 export default function ExecutivePage() {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
-      <DecorativeBackground />
+    <div className="surface-panel mx-auto my-3 flex w-[calc(100%-1.5rem)] max-w-6xl flex-col sm:my-8 sm:px-6 gap-6 px-4 py-6">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-primary-600 pb-3">
         <div>
           <h1 className="flex items-center gap-2 text-lg font-bold text-primary-800 dark:text-primary-400">

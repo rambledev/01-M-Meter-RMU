@@ -189,7 +189,7 @@ function Dashboard({ session, logout }: { session: CheckerSession; logout: () =>
   const readCount = meters.filter((m) => m.readThisMonth).length;
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
+    <div className="surface-panel mx-auto my-3 flex w-[calc(100%-1.5rem)] max-w-md flex-col sm:my-8 gap-6 px-4 py-6">
       <header className="flex flex-col gap-1 border-b-2 border-primary-600 pb-3">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold text-primary-800 dark:text-primary-400">

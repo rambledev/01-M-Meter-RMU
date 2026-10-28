@@ -17,8 +17,6 @@ import {
 import ChromeRequiredDialog from "@/components/ChromeRequiredDialog";
 import FtAnnouncements from "@/components/FtAnnouncements";
 import InstallShortcutButton from "@/components/InstallShortcutButton";
-import LoginHeroBackground from "@/components/LoginHeroBackground";
-import TechGridOverlay from "@/components/TechGridOverlay";
 import GoogleSignInButton from "@/components/resident/GoogleSignInButton";
 import { saveAdminSession } from "@/lib/admin/adminSession";
 import {
@@ -222,11 +220,7 @@ export default function Home() {
   }
 
   return (
-    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-[#0a1230] px-4 py-10 sm:px-8 lg:px-12">
-      <LoginHeroBackground />
-      {/* No negative z-index: this wrapper is not a stacking context, so a
-          -z-10 layer would paint beneath its bg; content above is z-10. */}
-      <TechGridOverlay className="text-white" />
+    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-4 py-10 sm:px-8 lg:px-12">
       <ChromeRequiredDialog />
 
       <div className="relative z-10 grid w-full max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-16">

@@ -62,7 +62,7 @@ function HistoryPage({ session }: { session: CheckerSession }) {
   }, []);
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
+    <div className="surface-panel mx-auto my-3 flex w-[calc(100%-1.5rem)] max-w-md flex-col sm:my-8 gap-6 px-4 py-6">
       <header className="flex items-center justify-between border-b-2 border-primary-600 pb-3">
         <h1 className="flex items-center gap-2 text-lg font-bold text-primary-800 dark:text-primary-400">
           <FileClock aria-hidden="true" className="h-5 w-5 shrink-0" />

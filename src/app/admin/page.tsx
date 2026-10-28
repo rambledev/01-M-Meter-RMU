@@ -104,7 +104,7 @@ export default function AdminPage() {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-zinc-200 bg-white transition-transform duration-200 ease-in-out dark:border-zinc-800 dark:bg-zinc-950 md:static md:h-auto md:transition-[width] md:duration-200 md:ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-white/10 bg-zinc-950/80 backdrop-blur-md transition-transform duration-200 ease-in-out md:static md:h-auto md:transition-[width] md:duration-200 md:ease-in-out ${
           sidebarOpen
             ? "translate-x-0 md:w-64"
             : "-translate-x-full md:w-0 md:min-w-0 md:translate-x-0 md:overflow-hidden md:border-r-0"
@@ -112,16 +112,16 @@ export default function AdminPage() {
       >
         <div className="flex items-center justify-between gap-2 border-b-2 border-primary-600 px-4 py-4">
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold text-primary-800 dark:text-primary-400">
+            <h1 className="truncate text-lg font-bold text-white">
               ผู้ดูแลระบบ
             </h1>
-            {adminName && <p className="truncate text-sm text-zinc-500">สวัสดี, {adminName}</p>}
+            {adminName && <p className="truncate text-sm text-zinc-400">สวัสดี, {adminName}</p>}
           </div>
           <button
             type="button"
             aria-label="ปิดเมนู"
             onClick={() => setSidebarOverride(false)}
-            className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-800"
+            className="shrink-0 rounded p-1 text-zinc-300 hover:bg-white/10 md:hidden"
           >
             <X aria-hidden="true" className="h-5 w-5" />
           </button>
@@ -136,7 +136,7 @@ export default function AdminPage() {
               className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold whitespace-nowrap transition-colors ${
                 tab === t.id
                   ? "bg-primary-600 text-white"
-                  : "text-zinc-600 hover:bg-primary-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  : "text-zinc-300 hover:bg-white/10 hover:text-white"
               }`}
             >
               <t.icon aria-hidden="true" className="h-4 w-4 shrink-0" />
@@ -145,11 +145,11 @@ export default function AdminPage() {
           ))}
         </nav>
 
-        <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
+        <div className="border-t border-white/10 p-3">
           <button
             type="button"
             onClick={handleLogout}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium whitespace-nowrap text-primary-700 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-zinc-800"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium whitespace-nowrap text-primary-300 hover:bg-white/10"
           >
             <LogOut aria-hidden="true" className="h-4 w-4 shrink-0" />
             ออกจากระบบ
@@ -158,23 +158,23 @@ export default function AdminPage() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <header className="flex items-center gap-3 border-b border-white/10 bg-zinc-950/50 px-4 py-3 backdrop-blur-md">
           <button
             type="button"
             aria-label={sidebarOpen ? "ซ่อนเมนู" : "แสดงเมนู"}
             onClick={() => setSidebarOverride(!sidebarOpen)}
-            className="shrink-0 rounded-lg border border-zinc-300 p-2 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="shrink-0 rounded-lg border border-white/20 p-2 text-zinc-200 hover:bg-white/10"
           >
             <Menu aria-hidden="true" className="h-5 w-5" />
           </button>
-          <h2 className="flex items-center gap-2 truncate text-base font-semibold text-zinc-800 dark:text-zinc-100">
-            {ActiveIcon && <ActiveIcon aria-hidden="true" className="h-5 w-5 shrink-0 text-primary-600" />}
+          <h2 className="flex items-center gap-2 truncate text-base font-semibold text-white">
+            {ActiveIcon && <ActiveIcon aria-hidden="true" className="h-5 w-5 shrink-0 text-primary-300" />}
             {activeLabel}
           </h2>
         </header>
 
-        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6">
-          <div className="flex w-full flex-col gap-6">
+        <main className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-6">
+          <div className="surface-panel flex w-full flex-col gap-6 p-4 sm:p-6">
             {tab === "dashboard" && <AdminDashboard />}
             {tab === "summary" && <AdminSummary />}
             {tab === "meters" && <MeterManagement />}

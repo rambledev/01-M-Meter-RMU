@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
-import TechGridOverlay from "@/components/TechGridOverlay";
 import { loginResidentWithGoogle } from "@/lib/resident/residentAuthApi";
 import {
   clearResidentSession,
@@ -64,8 +63,7 @@ export default function ResidentAuthGate({
 
   if (session === null) {
     return (
-      <div className="relative isolate flex min-h-screen flex-col items-center justify-center bg-linear-to-b from-primary-50 to-white px-4 py-12 dark:from-zinc-950 dark:to-zinc-950">
-        <TechGridOverlay className="-z-10 text-primary-900" />
+      <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12">
         <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-primary-600 shadow-sm">
             <Image

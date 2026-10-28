@@ -235,7 +235,7 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
 
   if (!meterId) {
     return (
-      <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-10 text-center">
+      <div className="surface-panel mx-auto my-3 flex w-[calc(100%-1.5rem)] max-w-md flex-col sm:my-8 gap-4 px-4 py-10 text-center">
         <p className="text-sm text-zinc-500">ไม่พบมิเตอร์ที่เลือก</p>
         <Link href="/checker" className="text-sm font-semibold text-primary-700 underline dark:text-primary-400">
           กลับหน้าหลัก
@@ -246,7 +246,7 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
 
   if (!meter) {
     return (
-      <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-10 text-center">
+      <div className="surface-panel mx-auto my-3 flex w-[calc(100%-1.5rem)] max-w-md flex-col sm:my-8 gap-4 px-4 py-10 text-center">
         <p className="text-sm text-zinc-500">
           {metersLoaded ? "ไม่พบมิเตอร์รหัสนี้" : "กำลังโหลด..."}
         </p>
@@ -258,7 +258,7 @@ function ReadingWorkflow({ session }: { session: CheckerSession }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-6">
+    <div className="surface-panel mx-auto my-3 flex w-[calc(100%-1.5rem)] max-w-md flex-col sm:my-8 gap-6 px-4 py-6">
       <header className="flex items-center justify-between">
         <Link href="/checker" className="flex items-center gap-1 text-sm font-semibold text-primary-700 underline dark:text-primary-400">
           <ArrowLeft aria-hidden="true" className="h-4 w-4 shrink-0" />

@@ -104,55 +104,28 @@
 }
 
 body {
-  background: var(--background);
+  /* Dark base matching the site-wide network background image
+     (src/components/NetworkBackground.tsx, 2026-10-28) — shown behind it
+     while it loads and on overscroll. --background stays white: it is the
+     color of content surfaces, not of the page canvas any more. */
+  background: #161616;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Modern tech/digital grid overlay (2026-10-22, explicit request: thin,
-   evenly spaced grid lines over the existing background, without changing
-   any background color/gradient/theme). The element carrying this class
-   paints ONLY transparent-backed lines — no background-color — so whatever
-   is behind it shows through unchanged. Line color derives from
-   currentColor at low alpha, so set `text-*` on the overlay element to
-   tint it (e.g. text-primary-900 on light role pages, text-white on the
-   dark login hero) without touching real text/UI colors elsewhere.
-   Minor cells every --grid-size, slightly stronger major lines every 4
-   cells for the "digital blueprint" look. Pure CSS, no images/animation. */
-.tech-grid {
-  --grid-size: 40px;
-  --grid-alpha: 6%;
-  --grid-major-alpha: 10%;
-  --grid-line: color-mix(in srgb, currentColor var(--grid-alpha), transparent);
-  --grid-major: color-mix(
-    in srgb,
-    currentColor var(--grid-major-alpha),
-    transparent
-  );
-  background-image:
-    linear-gradient(to right, var(--grid-major) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-major) 1px, transparent 1px),
-    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
-  background-size:
-    calc(var(--grid-size) * 4) calc(var(--grid-size) * 4),
-    calc(var(--grid-size) * 4) calc(var(--grid-size) * 4),
-    var(--grid-size) var(--grid-size),
-    var(--grid-size) var(--grid-size);
-  background-position: center top;
-  /* Soft falloff toward the edges so the grid reads as depth rather than
-     graph paper; never fully transparent, so it still covers every size. */
-  mask-image: radial-gradient(
-    ellipse 120% 90% at 50% 30%,
-    #000 45%,
-    rgb(0 0 0 / 0.45) 100%
-  );
-}
-
-@media (max-width: 640px) {
-  .tech-grid {
-    --grid-size: 32px;
-  }
+/* Light content surface floating over the dark network background, for
+   pages whose text sits directly on the page (headers, labels, lists) and
+   was designed for a white page. Near-opaque white keeps every existing
+   text/border color readable unchanged; the slight blur lets the network
+   lines read as depth at the edges without crossing behind text. */
+.surface-panel {
+  background-color: rgb(255 255 255 / 0.96);
+  border: 1px solid rgb(255 255 255 / 0.6);
+  border-radius: 1rem;
+  box-shadow:
+    0 20px 50px -12px rgb(0 0 0 / 0.55),
+    0 0 0 1px rgb(56 189 248 / 0.08);
+  backdrop-filter: blur(6px);
 }
 
 /* Print-only-this-element trick, used by PrintQrModal (src/components/
